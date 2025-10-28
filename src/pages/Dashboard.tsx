@@ -3,7 +3,14 @@ import { useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
@@ -43,8 +50,10 @@ const Dashboard = () => {
   }, []);
 
   const checkAuth = async () => {
-    const { data: { user } } = await supabase.auth.getUser();
-    
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+
     if (!user) {
       navigate("/auth");
       return;
@@ -58,7 +67,7 @@ const Dashboard = () => {
       .single();
 
     if (profileError || !profileData) {
-      navigate("/complete-profile");
+      navigate("/completar-cadastro");
       return;
     }
 
@@ -85,14 +94,16 @@ const Dashboard = () => {
 
   const handleCreateProject = async (e: React.FormEvent) => {
     e.preventDefault();
-    
+
     if (!profile) return;
 
     setCreating(true);
 
     try {
-      const { data: { user } } = await supabase.auth.getUser();
-      
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+
       if (!user) throw new Error("Usuário não autenticado");
 
       const { data, error } = await supabase
@@ -130,8 +141,8 @@ const Dashboard = () => {
 
   const stats = {
     total: projects.length,
-    emAndamento: projects.filter(p => p.status === "em_formalizacao").length,
-    concluidas: projects.filter(p => p.status === "concluida").length,
+    emAndamento: projects.filter((p) => p.status === "em_formalizacao").length,
+    concluidas: projects.filter((p) => p.status === "concluida").length,
     arquivadas: 0, // Will be implemented later
   };
 
@@ -152,9 +163,7 @@ const Dashboard = () => {
           <div className="flex items-center gap-4">
             <div className="text-right">
               <p className="text-sm font-medium">{profile?.full_name}</p>
-              <p className="text-xs text-muted-foreground capitalize">
-                {profile?.profile_type.replace("_", " ")}
-              </p>
+              <p className="text-xs text-muted-foreground capitalize">{profile?.profile_type.replace("_", " ")}</p>
             </div>
             <Button variant="ghost" size="icon" onClick={handleLogout}>
               <LogOut className="h-5 w-5" />
@@ -226,9 +235,7 @@ const Dashboard = () => {
             <DialogContent>
               <DialogHeader>
                 <DialogTitle>Criar Nova Demanda</DialogTitle>
-                <DialogDescription>
-                  Inicie o planejamento de uma nova contratação pública
-                </DialogDescription>
+                <DialogDescription>Inicie o planejamento de uma nova contratação pública</DialogDescription>
               </DialogHeader>
               <form onSubmit={handleCreateProject} className="space-y-4">
                 <div className="space-y-2">
@@ -270,7 +277,11 @@ const Dashboard = () => {
         {/* Projects List */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           {projects.map((project) => (
-            <Card key={project.id} className="hover:shadow-lg transition-shadow cursor-pointer" onClick={() => navigate(`/agente-cenario/${project.id}`)}>
+            <Card
+              key={project.id}
+              className="hover:shadow-lg transition-shadow cursor-pointer"
+              onClick={() => navigate(`/agente-cenario/${project.id}`)}
+            >
               <CardHeader>
                 <div className="flex items-start justify-between gap-2">
                   <CardTitle className="text-lg line-clamp-2">{project.name}</CardTitle>
@@ -282,7 +293,9 @@ const Dashboard = () => {
               </CardHeader>
               <CardContent>
                 <div className="space-y-2 text-sm text-muted-foreground">
-                  <p>Etapa: <span className="font-medium capitalize">{project.current_enfoque}</span></p>
+                  <p>
+                    Etapa: <span className="font-medium capitalize">{project.current_enfoque}</span>
+                  </p>
                   <p>Criado: {new Date(project.created_at).toLocaleDateString("pt-BR")}</p>
                 </div>
               </CardContent>
@@ -294,9 +307,7 @@ const Dashboard = () => {
               <CardContent className="flex flex-col items-center justify-center py-12 text-center">
                 <FileText className="h-12 w-12 text-muted-foreground mb-4" />
                 <p className="text-lg font-medium mb-2">Nenhuma demanda ainda</p>
-                <p className="text-sm text-muted-foreground mb-4">
-                  Crie sua primeira demanda para começar
-                </p>
+                <p className="text-sm text-muted-foreground mb-4">Crie sua primeira demanda para começar</p>
                 <Button onClick={() => setDialogOpen(true)} className="gap-2">
                   <Plus className="h-4 w-4" />
                   Nova Demanda
