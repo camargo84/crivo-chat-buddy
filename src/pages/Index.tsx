@@ -1,22 +1,23 @@
-import { useEffect } from "react";
+import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { FileText, ArrowRight, CheckCircle2, Bot, Sparkles } from "lucide-react";
 
 const Index = () => {
   const navigate = useNavigate();
+  const [isLoggedIn, setIsLoggedIn] = useState(false);
 
   useEffect(() => {
-    // Auto redirect to dashboard if already logged in
+    // Check auth status to update button behavior (no auto-redirect)
     const checkAuth = async () => {
       const { supabase } = await import("@/integrations/supabase/client");
-      const { data: { user } } = await supabase.auth.getUser();
-      if (user) {
-        navigate("/dashboard");
-      }
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+      setIsLoggedIn(!!user);
     };
     checkAuth();
-  }, [navigate]);
+  }, []);
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-primary/5 via-background to-secondary/5">
@@ -41,11 +42,20 @@ const Index = () => {
 
           {/* CTA Buttons */}
           <div className="flex flex-col sm:flex-row gap-4 justify-center mb-20">
-            <Button size="lg" onClick={() => navigate("/auth")} className="text-lg h-14 gap-2 shadow-lg">
+            <Button
+              size="lg"
+              onClick={() => navigate(isLoggedIn ? "/dashboard" : "/auth")}
+              className="text-lg h-14 gap-2 shadow-lg"
+            >
               Começar Agora
               <ArrowRight className="h-5 w-5" />
             </Button>
-            <Button size="lg" variant="outline" onClick={() => navigate("/auth")} className="text-lg h-14">
+            <Button
+              size="lg"
+              variant="outline"
+              onClick={() => navigate(isLoggedIn ? "/dashboard" : "/auth")}
+              className="text-lg h-14"
+            >
               Fazer Login
             </Button>
           </div>
@@ -77,9 +87,7 @@ const Index = () => {
                 <Sparkles className="w-6 h-6 text-white" />
               </div>
               <h3 className="text-xl font-semibold mb-3">Artefatos Automáticos</h3>
-              <p className="text-muted-foreground">
-                Gera DFD, ETP, TR, MR e PP profissionais automaticamente
-              </p>
+              <p className="text-muted-foreground">Gera DFD, ETP, TR, MR e PP profissionais automaticamente</p>
             </div>
           </div>
 
