@@ -10,9 +10,11 @@ const Index = () => {
   const handleAccessClick = async () => {
     setLoading(true);
     const { supabase } = await import("@/integrations/supabase/client");
-    
-    const { data: { session } } = await supabase.auth.getSession();
-    
+
+    const {
+      data: { session },
+    } = await supabase.auth.getSession();
+
     if (!session) {
       // Não autenticado → vai para /auth
       navigate("/auth");
@@ -20,12 +22,17 @@ const Index = () => {
       return;
     }
 
-    // Autenticado → verifica se tem perfil completo
-    const { data: profile } = await supabase
-      .from("user_profiles")
-      .select("*")
-      .eq("id", session.user.id)
-      .maybeSingle();
+    // ✅ VALIDAÇÃO CRÍTICA: Verificar se email foi confirmado
+    if (!session.user.email_confirmed_at) {
+      // Email não validado → forçar logout e ir para autenticação
+      await supabase.auth.signOut();
+      navigate("/auth");
+      setLoading(false);
+      return;
+    }
+
+    // Autenticado E email validado → verifica se tem perfil completo
+    const { data: profile } = await supabase.from("user_profiles").select("*").eq("id", session.user.id).maybeSingle();
 
     if (profile) {
       navigate("/dashboard");
