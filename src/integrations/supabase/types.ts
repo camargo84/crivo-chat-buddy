@@ -264,16 +264,20 @@ export type Database = {
         Row: {
           archived_at: string | null
           archived_by: string | null
+          coleta_completa: boolean | null
+          completude_score: number | null
           created_at: string | null
           current_enfoque: string | null
           deleted_at: string | null
           deleted_by: string | null
           description: string | null
           id: string
+          informacoes_essenciais: Json | null
           metadata: Json | null
           name: string
           organization_id: string
           status: string
+          synthesis_data: Json | null
           updated_at: string | null
           user_id: string
           visibility_status: string
@@ -281,16 +285,20 @@ export type Database = {
         Insert: {
           archived_at?: string | null
           archived_by?: string | null
+          coleta_completa?: boolean | null
+          completude_score?: number | null
           created_at?: string | null
           current_enfoque?: string | null
           deleted_at?: string | null
           deleted_by?: string | null
           description?: string | null
           id?: string
+          informacoes_essenciais?: Json | null
           metadata?: Json | null
           name: string
           organization_id: string
           status?: string
+          synthesis_data?: Json | null
           updated_at?: string | null
           user_id: string
           visibility_status?: string
@@ -298,16 +306,20 @@ export type Database = {
         Update: {
           archived_at?: string | null
           archived_by?: string | null
+          coleta_completa?: boolean | null
+          completude_score?: number | null
           created_at?: string | null
           current_enfoque?: string | null
           deleted_at?: string | null
           deleted_by?: string | null
           description?: string | null
           id?: string
+          informacoes_essenciais?: Json | null
           metadata?: Json | null
           name?: string
           organization_id?: string
           status?: string
+          synthesis_data?: Json | null
           updated_at?: string | null
           user_id?: string
           visibility_status?: string
@@ -324,48 +336,69 @@ export type Database = {
       }
       user_profiles: {
         Row: {
+          codigo_pncp: string | null
           cpf: string | null
           created_at: string | null
           email: string
+          endereco_completo: string | null
+          entidade_cnpj: string | null
+          entidade_nome: string | null
           full_name: string
           id: string
           organization_cnpj: string | null
           organization_id: string | null
           organization_name: string
+          orgao_demandante: string | null
           phone: string | null
           preferences: Json | null
           profile_type: string
           role_in_organization: string | null
+          telefone_contato: string | null
+          uasg_codigo: string | null
           updated_at: string | null
         }
         Insert: {
+          codigo_pncp?: string | null
           cpf?: string | null
           created_at?: string | null
           email: string
+          endereco_completo?: string | null
+          entidade_cnpj?: string | null
+          entidade_nome?: string | null
           full_name: string
           id: string
           organization_cnpj?: string | null
           organization_id?: string | null
           organization_name: string
+          orgao_demandante?: string | null
           phone?: string | null
           preferences?: Json | null
           profile_type?: string
           role_in_organization?: string | null
+          telefone_contato?: string | null
+          uasg_codigo?: string | null
           updated_at?: string | null
         }
         Update: {
+          codigo_pncp?: string | null
           cpf?: string | null
           created_at?: string | null
           email?: string
+          endereco_completo?: string | null
+          entidade_cnpj?: string | null
+          entidade_nome?: string | null
           full_name?: string
           id?: string
           organization_cnpj?: string | null
           organization_id?: string | null
           organization_name?: string
+          orgao_demandante?: string | null
           phone?: string | null
           preferences?: Json | null
           profile_type?: string
           role_in_organization?: string | null
+          telefone_contato?: string | null
+          uasg_codigo?: string | null
           updated_at?: string | null
         }
         Relationships: [
