@@ -6,6 +6,8 @@ import { getStandardQuestion } from '@/lib/prompts/standard-questions';
 import { generateAdaptiveQuestions } from '@/lib/prompts/adaptive-questions';
 import { monitorCompleteness, type CompletenessStatus } from '@/lib/completeness-monitor';
 import { generateSynthesis, type SynthesisData } from '@/lib/synthesis-service';
+import { generateCenarioReport } from '@/lib/docx-generator';
+import { saveAs } from 'file-saver';
 
 interface Props {
   projectId: string;
@@ -238,6 +240,40 @@ export function useCenarioChat({ projectId, userProfile, demandaTitle }: Props) 
     }
   }
   
+  async function handleDownloadReport() {
+    if (!synthesisData) {
+      toast({
+        variant: 'destructive',
+        title: 'Síntese não disponível',
+        description: 'Complete a conversa primeiro.'
+      });
+      return;
+    }
+    
+    try {
+      toast({
+        title: 'Gerando documento...',
+        description: 'Aguarde alguns instantes.'
+      });
+      
+      const blob = await generateCenarioReport(synthesisData, demandaTitle);
+      saveAs(blob, `Relatorio_Cenario_${projectId}_${Date.now()}.docx`);
+      
+      toast({
+        title: '✅ Relatório gerado!',
+        description: 'Arquivo .docx baixado com sucesso.'
+      });
+      
+    } catch (error) {
+      console.error('[Download] Erro:', error);
+      toast({
+        variant: 'destructive',
+        title: '❌ Erro ao gerar documento',
+        description: 'Tente novamente.'
+      });
+    }
+  }
+  
   return {
     messages,
     isLoading,
@@ -245,6 +281,7 @@ export function useCenarioChat({ projectId, userProfile, demandaTitle }: Props) 
     completenessStatus,
     synthesisData,
     phase,
-    handleSendMessage
+    handleSendMessage,
+    handleDownloadReport
   };
 }
