@@ -5,19 +5,35 @@ import { FileText, ArrowRight, CheckCircle2, Bot, Sparkles } from "lucide-react"
 
 const Index = () => {
   const navigate = useNavigate();
-  const [isLoggedIn, setIsLoggedIn] = useState(false);
+  const [loading, setLoading] = useState(false);
 
-  useEffect(() => {
-    // Check auth status to update button behavior (no auto-redirect)
-    const checkAuth = async () => {
-      const { supabase } = await import("@/integrations/supabase/client");
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
-      setIsLoggedIn(!!user);
-    };
-    checkAuth();
-  }, []);
+  const handleAccessClick = async () => {
+    setLoading(true);
+    const { supabase } = await import("@/integrations/supabase/client");
+    
+    const { data: { session } } = await supabase.auth.getSession();
+    
+    if (!session) {
+      // Não autenticado → vai para /auth
+      navigate("/auth");
+      setLoading(false);
+      return;
+    }
+
+    // Autenticado → verifica se tem perfil completo
+    const { data: profile } = await supabase
+      .from("user_profiles")
+      .select("*")
+      .eq("id", session.user.id)
+      .maybeSingle();
+
+    if (profile) {
+      navigate("/dashboard");
+    } else {
+      navigate("/completar-cadastro");
+    }
+    setLoading(false);
+  };
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-primary/5 via-background to-secondary/5">
@@ -40,23 +56,25 @@ const Index = () => {
             </p>
           </div>
 
-          {/* CTA Buttons */}
-          <div className="flex flex-col sm:flex-row gap-4 justify-center mb-20">
+          {/* CTA Button */}
+          <div className="flex justify-center mb-20">
             <Button
               size="lg"
-              onClick={() => navigate(isLoggedIn ? "/dashboard" : "/auth")}
-              className="text-lg h-14 gap-2 shadow-lg"
+              onClick={handleAccessClick}
+              disabled={loading}
+              className="text-lg h-14 gap-2 shadow-lg px-12"
             >
-              Começar Agora
-              <ArrowRight className="h-5 w-5" />
-            </Button>
-            <Button
-              size="lg"
-              variant="outline"
-              onClick={() => navigate(isLoggedIn ? "/dashboard" : "/auth")}
-              className="text-lg h-14"
-            >
-              Fazer Login
+              {loading ? (
+                <>
+                  <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white" />
+                  Carregando...
+                </>
+              ) : (
+                <>
+                  Acessar Agora
+                  <ArrowRight className="h-5 w-5" />
+                </>
+              )}
             </Button>
           </div>
 

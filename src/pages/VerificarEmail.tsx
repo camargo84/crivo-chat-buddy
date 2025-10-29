@@ -76,7 +76,7 @@ const VerificarEmail = () => {
       navigate("/completar-cadastro");
     } catch (error: any) {
       console.error("OTP verification error:", error);
-      toast.error(error.message || "Código inválido. Tente novamente.");
+      toast.error("Código inválido. Tente novamente.");
       setOtp(["", "", "", "", "", ""]);
       inputRefs.current[0]?.focus();
     } finally {
@@ -94,14 +94,14 @@ const VerificarEmail = () => {
       setResendDisabled(true);
       setCountdown(60);
     } catch (error: any) {
-      toast.error(error.message || "Erro ao reenviar código");
+      toast.error("Erro ao reenviar código");
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-primary via-primary/90 to-primary/80 p-4">
+    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-primary/5 via-background to-secondary/5 p-4">
       <Card className="w-full max-w-md shadow-2xl">
         <CardHeader className="text-center space-y-4">
           <div className="mx-auto w-16 h-16 bg-primary/10 rounded-full flex items-center justify-center">
@@ -126,7 +126,7 @@ const VerificarEmail = () => {
                 onChange={(e) => handleOtpChange(index, e.target.value)}
                 onKeyDown={(e) => handleKeyDown(index, e)}
                 disabled={loading}
-                className="w-12 h-14 text-center text-2xl font-bold border-2 border-input rounded-lg focus:border-primary focus:ring-2 focus:ring-primary/20 disabled:opacity-50"
+                className="w-12 h-14 text-center text-2xl font-bold border-2 border-input rounded-lg focus:border-primary focus:ring-2 focus:ring-primary/20 disabled:opacity-50 transition-colors"
                 autoFocus={index === 0}
               />
             ))}
