@@ -3,20 +3,10 @@ import { useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-} from "@/components/ui/dialog";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
 import { toast } from "sonner";
 import { FileText, Plus, LogOut, Loader2, FolderOpen, CheckCircle2, Archive } from "lucide-react";
 import { StatusBadge } from "@/components/StatusBadge";
+import { NovaDemandaModal } from "@/components/demanda/NovaDemandaModal";
 
 type UserProfile = {
   id: string;
@@ -42,8 +32,6 @@ const Dashboard = () => {
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [projects, setProjects] = useState<Project[]>([]);
   const [dialogOpen, setDialogOpen] = useState(false);
-  const [newProject, setNewProject] = useState({ name: "", description: "" });
-  const [creating, setCreating] = useState(false);
 
   useEffect(() => {
     checkAuth();
@@ -90,45 +78,6 @@ const Dashboard = () => {
   const handleLogout = async () => {
     await supabase.auth.signOut();
     navigate("/auth");
-  };
-
-  const handleCreateProject = async (e: React.FormEvent) => {
-    e.preventDefault();
-
-    if (!profile) return;
-
-    setCreating(true);
-
-    try {
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
-
-      if (!user) throw new Error("Usuário não autenticado");
-
-      const { data, error } = await supabase
-        .from("projects")
-        .insert({
-          user_id: user.id,
-          organization_id: profile.organization_id,
-          name: newProject.name,
-          description: newProject.description || null,
-        })
-        .select()
-        .single();
-
-      if (error) throw error;
-
-      toast.success("Demanda criada com sucesso!");
-      setDialogOpen(false);
-      setNewProject({ name: "", description: "" });
-      navigate(`/agente-cenario/${data.id}`);
-    } catch (error: any) {
-      console.error("Create project error:", error);
-      toast.error(error.message || "Erro ao criar demanda");
-    } finally {
-      setCreating(false);
-    }
   };
 
   if (loading) {
@@ -225,54 +174,13 @@ const Dashboard = () => {
         {/* Actions Bar */}
         <div className="flex items-center justify-between mb-6">
           <h2 className="text-2xl font-bold">Minhas Demandas</h2>
-          <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-            <DialogTrigger asChild>
-              <Button className="gap-2">
-                <Plus className="h-4 w-4" />
-                Nova Demanda
-              </Button>
-            </DialogTrigger>
-            <DialogContent>
-              <DialogHeader>
-                <DialogTitle>Criar Nova Demanda</DialogTitle>
-                <DialogDescription>Inicie o planejamento de uma nova contratação pública</DialogDescription>
-              </DialogHeader>
-              <form onSubmit={handleCreateProject} className="space-y-4">
-                <div className="space-y-2">
-                  <Label htmlFor="name">Nome da Demanda *</Label>
-                  <Input
-                    id="name"
-                    placeholder="Ex: Aquisição de notebooks para escolas"
-                    value={newProject.name}
-                    onChange={(e) => setNewProject({ ...newProject, name: e.target.value })}
-                    required
-                    minLength={5}
-                    maxLength={200}
-                    disabled={creating}
-                  />
-                </div>
-
-                <div className="space-y-2">
-                  <Label htmlFor="description">Descrição (opcional)</Label>
-                  <Textarea
-                    id="description"
-                    placeholder="Breve descrição da demanda..."
-                    value={newProject.description}
-                    onChange={(e) => setNewProject({ ...newProject, description: e.target.value })}
-                    maxLength={500}
-                    rows={3}
-                    disabled={creating}
-                  />
-                </div>
-
-                <Button type="submit" className="w-full" disabled={creating}>
-                  {creating && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                  Criar e Iniciar Agente Cenário
-                </Button>
-              </form>
-            </DialogContent>
-          </Dialog>
+          <Button className="gap-2" onClick={() => setDialogOpen(true)}>
+            <Plus className="h-4 w-4" />
+            Nova Demanda
+          </Button>
         </div>
+
+        <NovaDemandaModal open={dialogOpen} onOpenChange={setDialogOpen} />
 
         {/* Projects List */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">

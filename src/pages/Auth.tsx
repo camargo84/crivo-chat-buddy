@@ -10,6 +10,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { toast } from "sonner";
 import { FileText, Loader2, AlertCircle } from "lucide-react";
+import { parseAuthError } from "@/lib/auth/errorHandler";
 
 const Auth = () => {
   const navigate = useNavigate();
@@ -62,37 +63,22 @@ const Auth = () => {
       });
       
       if (error) {
-        // Verificar se é erro de email não confirmado
-        if (error.message.includes("Email not confirmed") || 
-            (error.message.includes("Invalid login credentials") && email)) {
-          setAlertMessage({
-            type: 'error',
-            text: 'Você precisa validar seu email antes de acessar o sistema.',
-            action: {
-              label: 'Reenviar código',
-              onClick: async () => {
-                setLoading(true);
-                const { error: resendError } = await supabase.auth.resend({
-                  type: 'signup',
-                  email,
-                });
-                if (!resendError) {
-                  toast.success("✓ Novo código enviado para " + email);
-                  navigate("/verificar-email", { state: { email, password, type: "signup" } });
-                } else {
-                  setAlertMessage({ type: 'error', text: 'Não foi possível reenviar. Tente novamente.' });
-                }
-                setLoading(false);
-              }
+        // Usar centralizador de erros
+        const errorInfo = parseAuthError(error);
+        
+        setAlertMessage({
+          type: 'error',
+          text: errorInfo.description,
+          action: errorInfo.action ? {
+            label: errorInfo.action.label,
+            onClick: async () => {
+              await handleErrorAction(errorInfo.action!.handler, email);
             }
-          });
-          setLoading(false);
-          return;
-        } else {
-          setAlertMessage({ type: 'error', text: 'Email ou senha incorretos' });
-          setLoading(false);
-          return;
-        }
+          } : undefined
+        });
+        
+        setLoading(false);
+        return;
       }
       
       // Check if profile exists
@@ -111,9 +97,41 @@ const Auth = () => {
       }
     } catch (error: any) {
       console.error("Auth error:", error);
-      toast.error("✗ Erro ao fazer login");
+      const errorInfo = parseAuthError(error);
+      setAlertMessage({ type: 'error', text: errorInfo.description });
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleErrorAction = async (
+    action: 'resend_verification' | 'goto_signup' | 'goto_login' | 'goto_forgot_password',
+    userEmail: string
+  ) => {
+    switch (action) {
+      case 'resend_verification':
+        setLoading(true);
+        const { error: resendError } = await supabase.auth.resend({
+          type: 'signup',
+          email: userEmail,
+        });
+        if (!resendError) {
+          toast.success("✓ Email de verificação reenviado!");
+          navigate("/verificar-email", { state: { email: userEmail, type: "signup" } });
+        } else {
+          setAlertMessage({ type: 'error', text: 'Não foi possível reenviar. Tente novamente.' });
+        }
+        setLoading(false);
+        break;
+      case 'goto_signup':
+        setActiveTab('register');
+        break;
+      case 'goto_login':
+        setActiveTab('login');
+        break;
+      case 'goto_forgot_password':
+        handleForgotPassword();
+        break;
     }
   };
 
@@ -166,51 +184,22 @@ const Auth = () => {
       });
       
       if (error) {
-        if (error.message.includes("already") || error.message.includes("User already registered")) {
-          // Email já existe - verificar se foi confirmado
-          const { data: signInData, error: signInError } = await supabase.auth.signInWithPassword({
-            email,
-            password,
-          });
-          
-          if (signInError) {
-            // Se não conseguiu fazer login, provavelmente o email não foi confirmado
-            if (signInError.message.includes("Email not confirmed") || signInError.message.includes("Invalid login credentials")) {
-              setAlertMessage({
-                type: 'error',
-                text: 'Sua conta ainda não foi validada.',
-                action: {
-                  label: 'Reenviar código',
-                  onClick: async () => {
-                    setLoading(true);
-                    const { error: resendError } = await supabase.auth.resend({
-                      type: 'signup',
-                      email,
-                    });
-                    if (!resendError) {
-                      toast.success("✓ Novo código enviado para " + email);
-                      navigate("/verificar-email", { state: { email, password, type: "signup" } });
-                    } else {
-                      setAlertMessage({ type: 'error', text: 'Não foi possível reenviar. Tente novamente ou use outro email.' });
-                    }
-                    setLoading(false);
-                  }
-                }
-              });
-            } else {
-              setAlertMessage({ type: 'error', text: 'Este email já possui cadastro no CRIVO. Use a aba Entrar para prosseguir.' });
+        // Usar centralizador de erros
+        const errorInfo = parseAuthError(error);
+        
+        setAlertMessage({
+          type: 'error',
+          text: errorInfo.description,
+          action: errorInfo.action ? {
+            label: errorInfo.action.label,
+            onClick: async () => {
+              await handleErrorAction(errorInfo.action!.handler, email);
             }
-          } else {
-            // Login funcionou - email já foi confirmado
-            setAlertMessage({ type: 'error', text: 'Este email já possui cadastro no CRIVO. Use a aba Entrar para prosseguir.' });
-          }
-          setLoading(false);
-          return;
-        } else {
-          setAlertMessage({ type: 'error', text: 'Erro ao criar conta: ' + error.message });
-          setLoading(false);
-          return;
-        }
+          } : undefined
+        });
+        
+        setLoading(false);
+        return;
       }
       
       // Cadastro novo bem-sucedido
@@ -218,7 +207,8 @@ const Auth = () => {
       navigate("/verificar-email", { state: { email, password, type: "signup" } });
     } catch (error: any) {
       console.error("Auth error:", error);
-      setAlertMessage({ type: 'error', text: 'Erro ao criar conta' });
+      const errorInfo = parseAuthError(error);
+      setAlertMessage({ type: 'error', text: errorInfo.description });
     } finally {
       setLoading(false);
     }
