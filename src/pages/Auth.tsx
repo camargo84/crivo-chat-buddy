@@ -46,7 +46,7 @@ const Auth = () => {
     e.preventDefault();
     
     if (password.length < 6) {
-      toast.error("A senha deve ter no mínimo 6 caracteres");
+      toast.error("✗ A senha deve ter no mínimo 6 caracteres");
       return;
     }
 
@@ -59,29 +59,50 @@ const Auth = () => {
       });
       
       if (error) {
-        if (error.message.includes("Invalid login credentials")) {
-          throw new Error("Email ou senha incorretos");
-        }
-        throw error;
+        toast.error("✗ Email ou senha incorretos");
+        return;
       }
       
       // Check if profile exists
       const { data: profile } = await supabase
         .from("user_profiles")
-        .select("*")
+        .select("id")
         .eq("id", data.user.id)
         .maybeSingle();
 
       if (profile) {
-        toast.success("Login realizado com sucesso!");
+        toast.success("✓ Login realizado com sucesso!");
         navigate("/dashboard");
       } else {
-        toast.success("Complete seu cadastro para continuar");
+        toast.success("✓ Login realizado! Complete seu cadastro.");
         navigate("/completar-cadastro");
       }
     } catch (error: any) {
       console.error("Auth error:", error);
-      toast.error(error.message || "Erro ao fazer login");
+      toast.error("✗ Erro ao fazer login");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleForgotPassword = async () => {
+    const emailInput = prompt("Digite seu email:");
+    if (!emailInput) return;
+    
+    setLoading(true);
+    try {
+      const { error } = await supabase.auth.resetPasswordForEmail(emailInput, {
+        redirectTo: undefined,
+      });
+      
+      if (error) {
+        toast.error("✗ Erro ao enviar código");
+      } else {
+        toast.success("✓ Código enviado para " + emailInput);
+        navigate("/verificar-email", { state: { email: emailInput, type: "recovery" } });
+      }
+    } catch (error) {
+      toast.error("✗ Erro ao enviar código");
     } finally {
       setLoading(false);
     }
@@ -91,12 +112,12 @@ const Auth = () => {
     e.preventDefault();
     
     if (password !== confirmPassword) {
-      toast.error("As senhas não coincidem");
+      toast.error("✗ As senhas não coincidem");
       return;
     }
 
     if (password.length < 8) {
-      toast.error("A senha deve ter no mínimo 8 caracteres");
+      toast.error("✗ A senha deve ter no mínimo 8 caracteres");
       return;
     }
 
@@ -106,20 +127,25 @@ const Auth = () => {
       const { error } = await supabase.auth.signUp({
         email,
         password,
+        options: {
+          emailRedirectTo: undefined,
+        },
       });
       
       if (error) {
-        if (error.message.includes("User already registered")) {
-          throw new Error("Este email já está cadastrado");
+        if (error.message.includes("already")) {
+          toast.error("✗ Este email já está cadastrado");
+        } else {
+          toast.error("✗ Erro ao criar conta: " + error.message);
         }
-        throw error;
+        return;
       }
       
-      toast.success("Código de verificação enviado para seu email!");
-      navigate("/verificar-email", { state: { email } });
+      toast.success("✓ Código de verificação enviado para " + email);
+      navigate("/verificar-email", { state: { email, password, type: "signup" } });
     } catch (error: any) {
       console.error("Auth error:", error);
-      toast.error(error.message || "Erro ao criar conta");
+      toast.error("✗ Erro ao criar conta");
     } finally {
       setLoading(false);
     }
@@ -195,6 +221,7 @@ const Auth = () => {
                 <div className="text-center space-y-2">
                   <button
                     type="button"
+                    onClick={handleForgotPassword}
                     className="text-sm text-primary hover:underline"
                     disabled={loading}
                   >

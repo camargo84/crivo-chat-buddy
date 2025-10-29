@@ -6,6 +6,7 @@ import { BrowserRouter, Routes, Route } from "react-router-dom";
 import Index from "./pages/Index";
 import Auth from "./pages/Auth";
 import VerificarEmail from "./pages/VerificarEmail";
+import RedefinirSenha from "./pages/RedefinirSenha";
 import CompleteProfile from "./pages/CompleteProfile";
 import CadastroPF from "./pages/CadastroPF";
 import CadastroPJ from "./pages/CadastroPJ";
@@ -26,6 +27,7 @@ const App = () => (
           <Route path="/" element={<Index />} />
           <Route path="/auth" element={<Auth />} />
           <Route path="/verificar-email" element={<VerificarEmail />} />
+          <Route path="/redefinir-senha" element={<RedefinirSenha />} />
           <Route path="/completar-cadastro" element={<CompleteProfile />} />
           <Route path="/cadastro-pf" element={<CadastroPF />} />
           <Route path="/cadastro-pj" element={<CadastroPJ />} />
