@@ -273,6 +273,7 @@ export type Database = {
           description: string | null
           id: string
           informacoes_essenciais: Json | null
+          last_accessed_at: string | null
           metadata: Json | null
           name: string
           organization_id: string
@@ -294,6 +295,7 @@ export type Database = {
           description?: string | null
           id?: string
           informacoes_essenciais?: Json | null
+          last_accessed_at?: string | null
           metadata?: Json | null
           name: string
           organization_id: string
@@ -315,6 +317,7 @@ export type Database = {
           description?: string | null
           id?: string
           informacoes_essenciais?: Json | null
+          last_accessed_at?: string | null
           metadata?: Json | null
           name?: string
           organization_id?: string
@@ -449,7 +452,24 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
-      [_ in never]: never
+      search_projects: {
+        Args: {
+          search_archived?: boolean
+          search_query: string
+          user_id_param: string
+        }
+        Returns: {
+          created_at: string
+          current_enfoque: string
+          id: string
+          last_accessed_at: string
+          name: string
+          similarity: number
+          status: string
+        }[]
+      }
+      show_limit: { Args: never; Returns: number }
+      show_trgm: { Args: { "": string }; Returns: string[] }
     }
     Enums: {
       [_ in never]: never

@@ -3,10 +3,13 @@ import { useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { toast } from "sonner";
 import { FileText, Plus, LogOut, Loader2, FolderOpen, CheckCircle2, Archive } from "lucide-react";
 import { StatusBadge } from "@/components/StatusBadge";
 import { NovaDemandaModal } from "@/components/demanda/NovaDemandaModal";
+import { GlobalSearch } from "@/components/GlobalSearch";
+import { ProjectCard } from "@/components/ProjectCard";
 
 type UserProfile = {
   id: string;
@@ -23,6 +26,7 @@ type Project = {
   status: string;
   visibility_status: string;
   current_enfoque: string;
+  last_accessed_at: string;
   created_at: string;
 };
 
@@ -30,8 +34,10 @@ const Dashboard = () => {
   const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
   const [profile, setProfile] = useState<UserProfile | null>(null);
-  const [projects, setProjects] = useState<Project[]>([]);
+  const [activeProjects, setActiveProjects] = useState<Project[]>([]);
+  const [archivedProjects, setArchivedProjects] = useState<Project[]>([]);
   const [dialogOpen, setDialogOpen] = useState(false);
+  const [activeTab, setActiveTab] = useState('ativas');
 
   useEffect(() => {
     checkAuth();
@@ -61,15 +67,28 @@ const Dashboard = () => {
 
     setProfile(profileData);
 
-    // Get projects
-    const { data: projectsData } = await supabase
+    // Get active projects
+    const { data: activeData } = await supabase
       .from("projects")
       .select("*")
       .eq("visibility_status", "ativa")
+      .order("last_accessed_at", { ascending: false, nullsFirst: false })
       .order("created_at", { ascending: false });
 
-    if (projectsData) {
-      setProjects(projectsData);
+    if (activeData) {
+      setActiveProjects(activeData);
+    }
+
+    // Get archived projects
+    const { data: archivedData } = await supabase
+      .from("projects")
+      .select("*")
+      .eq("visibility_status", "arquivada")
+      .order("last_accessed_at", { ascending: false, nullsFirst: false })
+      .order("created_at", { ascending: false });
+
+    if (archivedData) {
+      setArchivedProjects(archivedData);
     }
 
     setLoading(false);
@@ -89,10 +108,10 @@ const Dashboard = () => {
   }
 
   const stats = {
-    total: projects.length,
-    emAndamento: projects.filter((p) => p.status === "em_formalizacao").length,
-    concluidas: projects.filter((p) => p.status === "concluida").length,
-    arquivadas: 0, // Will be implemented later
+    total: activeProjects.length + archivedProjects.length,
+    emAndamento: activeProjects.filter((p) => p.status === "em_formalizacao").length,
+    concluidas: activeProjects.filter((p) => p.status === "concluida").length,
+    arquivadas: archivedProjects.length,
   };
 
   return (
@@ -182,48 +201,75 @@ const Dashboard = () => {
 
         <NovaDemandaModal open={dialogOpen} onOpenChange={setDialogOpen} />
 
-        {/* Projects List */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {projects.map((project) => (
-            <Card
-              key={project.id}
-              className="hover:shadow-lg transition-shadow cursor-pointer"
-              onClick={() => navigate(`/agente-cenario/${project.id}`)}
-            >
-              <CardHeader>
-                <div className="flex items-start justify-between gap-2">
-                  <CardTitle className="text-lg line-clamp-2">{project.name}</CardTitle>
-                  <StatusBadge status={project.status} />
-                </div>
-                {project.description && (
-                  <CardDescription className="line-clamp-2">{project.description}</CardDescription>
-                )}
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-2 text-sm text-muted-foreground">
-                  <p>
-                    Etapa: <span className="font-medium capitalize">{project.current_enfoque}</span>
-                  </p>
-                  <p>Criado: {new Date(project.created_at).toLocaleDateString("pt-BR")}</p>
-                </div>
-              </CardContent>
-            </Card>
-          ))}
-
-          {projects.length === 0 && (
-            <Card className="col-span-full">
-              <CardContent className="flex flex-col items-center justify-center py-12 text-center">
-                <FileText className="h-12 w-12 text-muted-foreground mb-4" />
-                <p className="text-lg font-medium mb-2">Nenhuma demanda ainda</p>
-                <p className="text-sm text-muted-foreground mb-4">Crie sua primeira demanda para começar</p>
-                <Button onClick={() => setDialogOpen(true)} className="gap-2">
-                  <Plus className="h-4 w-4" />
-                  Nova Demanda
-                </Button>
-              </CardContent>
-            </Card>
-          )}
-        </div>
+        {/* Tabs: Ativas / Arquivadas */}
+        <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
+          <TabsList className="grid w-full max-w-md grid-cols-2">
+            <TabsTrigger value="ativas">
+              Ativas ({activeProjects.length})
+            </TabsTrigger>
+            <TabsTrigger value="arquivadas">
+              Arquivadas ({archivedProjects.length})
+            </TabsTrigger>
+          </TabsList>
+          
+          {/* Tab: Demandas Ativas */}
+          <TabsContent value="ativas" className="space-y-6 mt-6">
+            {/* Busca em ativas */}
+            <GlobalSearch searchInArchived={false} />
+            
+            {/* Grid de cards */}
+            {activeProjects.length > 0 ? (
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                {activeProjects.map((project) => (
+                  <ProjectCard 
+                    key={project.id} 
+                    project={project} 
+                    onUpdate={checkAuth} 
+                  />
+                ))}
+              </div>
+            ) : (
+              <Card className="col-span-full">
+                <CardContent className="flex flex-col items-center justify-center py-12 text-center">
+                  <FileText className="h-12 w-12 text-muted-foreground mb-4" />
+                  <p className="text-lg font-medium mb-2">Nenhuma demanda ativa</p>
+                  <p className="text-sm text-muted-foreground mb-4">Crie sua primeira demanda para começar</p>
+                  <Button onClick={() => setDialogOpen(true)} className="gap-2">
+                    <Plus className="h-4 w-4" />
+                    Nova Demanda
+                  </Button>
+                </CardContent>
+              </Card>
+            )}
+          </TabsContent>
+          
+          {/* Tab: Demandas Arquivadas */}
+          <TabsContent value="arquivadas" className="space-y-6 mt-6">
+            {/* Busca em arquivadas */}
+            <GlobalSearch searchInArchived={true} />
+            
+            {/* Grid de cards */}
+            {archivedProjects.length > 0 ? (
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                {archivedProjects.map((project) => (
+                  <ProjectCard 
+                    key={project.id} 
+                    project={project} 
+                    onUpdate={checkAuth} 
+                  />
+                ))}
+              </div>
+            ) : (
+              <Card className="col-span-full">
+                <CardContent className="flex flex-col items-center justify-center py-12 text-center">
+                  <Archive className="h-12 w-12 text-muted-foreground mb-4" />
+                  <p className="text-lg font-medium mb-2">Nenhuma demanda arquivada</p>
+                  <p className="text-sm text-muted-foreground">As demandas arquivadas aparecerão aqui</p>
+                </CardContent>
+              </Card>
+            )}
+          </TabsContent>
+        </Tabs>
       </main>
     </div>
   );

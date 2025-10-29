@@ -178,7 +178,7 @@ export function NovaDemandaModal({ open, onOpenChange }: NovaDemandaModalProps) 
               placeholder="Ex: Ausência de calçada acessível no CAPS"
               value={situacaoProblema}
               onChange={handleChange}
-              maxLength={150}
+              maxLength={280}
               disabled={loading}
               className={cn(
                 "transition-all",
@@ -213,15 +213,18 @@ export function NovaDemandaModal({ open, onOpenChange }: NovaDemandaModalProps) 
                 </span>
                 <span
                   className={cn(
-                    "font-mono",
+                    "font-mono transition-colors",
                     situacaoProblema.length < 10 && "text-muted-foreground",
                     situacaoProblema.length >= 10 &&
-                      situacaoProblema.length <= 150 &&
+                      situacaoProblema.length <= 260 &&
                       "text-green-600",
-                    situacaoProblema.length > 150 && "text-destructive"
+                    situacaoProblema.length > 260 &&
+                      situacaoProblema.length <= 280 &&
+                      "text-orange-600",
+                    situacaoProblema.length > 280 && "text-destructive"
                   )}
                 >
-                  {situacaoProblema.length}/150
+                  {situacaoProblema.length}/280
                 </span>
               </div>
             </div>
