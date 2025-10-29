@@ -7,8 +7,9 @@ import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Checkbox } from "@/components/ui/checkbox";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 import { toast } from "sonner";
-import { FileText, Loader2 } from "lucide-react";
+import { FileText, Loader2, AlertCircle } from "lucide-react";
 
 const Auth = () => {
   const navigate = useNavigate();
@@ -18,6 +19,7 @@ const Auth = () => {
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [rememberMe, setRememberMe] = useState(false);
+  const [alertMessage, setAlertMessage] = useState<{ type: 'error' | 'info', text: string, action?: { label: string, onClick: () => void } } | null>(null);
 
   useEffect(() => {
     checkAuth();
@@ -44,9 +46,10 @@ const Auth = () => {
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
+    setAlertMessage(null);
     
     if (password.length < 6) {
-      toast.error("✗ A senha deve ter no mínimo 6 caracteres");
+      setAlertMessage({ type: 'error', text: 'A senha deve ter no mínimo 6 caracteres' });
       return;
     }
 
@@ -62,31 +65,34 @@ const Auth = () => {
         // Verificar se é erro de email não confirmado
         if (error.message.includes("Email not confirmed") || 
             (error.message.includes("Invalid login credentials") && email)) {
-          toast.error(
-            "Sua conta precisa ser validada por email antes de fazer login.",
-            {
-              duration: 5000,
-              action: {
-                label: "Reenviar código",
-                onClick: async () => {
-                  const { error: resendError } = await supabase.auth.resend({
-                    type: 'signup',
-                    email,
-                  });
-                  if (!resendError) {
-                    toast.success("✓ Novo código enviado para " + email);
-                    navigate("/verificar-email", { state: { email, password, type: "signup" } });
-                  } else {
-                    toast.error("✗ Não foi possível reenviar. Tente novamente.");
-                  }
-                },
-              },
+          setAlertMessage({
+            type: 'error',
+            text: 'Você precisa validar seu email antes de acessar o sistema.',
+            action: {
+              label: 'Reenviar código',
+              onClick: async () => {
+                setLoading(true);
+                const { error: resendError } = await supabase.auth.resend({
+                  type: 'signup',
+                  email,
+                });
+                if (!resendError) {
+                  toast.success("✓ Novo código enviado para " + email);
+                  navigate("/verificar-email", { state: { email, password, type: "signup" } });
+                } else {
+                  setAlertMessage({ type: 'error', text: 'Não foi possível reenviar. Tente novamente.' });
+                }
+                setLoading(false);
+              }
             }
-          );
+          });
+          setLoading(false);
+          return;
         } else {
-          toast.error("✗ Email ou senha incorretos");
+          setAlertMessage({ type: 'error', text: 'Email ou senha incorretos' });
+          setLoading(false);
+          return;
         }
-        return;
       }
       
       // Check if profile exists
@@ -136,14 +142,15 @@ const Auth = () => {
 
   const handleRegister = async (e: React.FormEvent) => {
     e.preventDefault();
+    setAlertMessage(null);
     
     if (password !== confirmPassword) {
-      toast.error("✗ As senhas não coincidem");
+      setAlertMessage({ type: 'error', text: 'As senhas não coincidem' });
       return;
     }
 
     if (password.length < 8) {
-      toast.error("✗ A senha deve ter no mínimo 8 caracteres");
+      setAlertMessage({ type: 'error', text: 'A senha deve ter no mínimo 8 caracteres' });
       return;
     }
 
@@ -169,38 +176,41 @@ const Auth = () => {
           if (signInError) {
             // Se não conseguiu fazer login, provavelmente o email não foi confirmado
             if (signInError.message.includes("Email not confirmed") || signInError.message.includes("Invalid login credentials")) {
-              toast.error(
-                "Você já iniciou o cadastro, mas precisa validar seu email antes de continuar.",
-                {
-                  duration: 5000,
-                  action: {
-                    label: "Reenviar código",
-                    onClick: async () => {
-                      const { error: resendError } = await supabase.auth.resend({
-                        type: 'signup',
-                        email,
-                      });
-                      if (!resendError) {
-                        toast.success("✓ Novo código enviado para " + email);
-                        navigate("/verificar-email", { state: { email, password, type: "signup" } });
-                      } else {
-                        toast.error("✗ Não foi possível reenviar. Tente novamente ou use outro email.");
-                      }
-                    },
-                  },
+              setAlertMessage({
+                type: 'error',
+                text: 'Sua conta ainda não foi validada.',
+                action: {
+                  label: 'Reenviar código',
+                  onClick: async () => {
+                    setLoading(true);
+                    const { error: resendError } = await supabase.auth.resend({
+                      type: 'signup',
+                      email,
+                    });
+                    if (!resendError) {
+                      toast.success("✓ Novo código enviado para " + email);
+                      navigate("/verificar-email", { state: { email, password, type: "signup" } });
+                    } else {
+                      setAlertMessage({ type: 'error', text: 'Não foi possível reenviar. Tente novamente ou use outro email.' });
+                    }
+                    setLoading(false);
+                  }
                 }
-              );
+              });
             } else {
-              toast.error("✗ Este email já está cadastrado. Use a aba Entrar.");
+              setAlertMessage({ type: 'error', text: 'Este email já possui cadastro no CRIVO. Use a aba Entrar para prosseguir.' });
             }
           } else {
             // Login funcionou - email já foi confirmado
-            toast.error("✗ Este email já está ativo. Use a aba Entrar.");
+            setAlertMessage({ type: 'error', text: 'Este email já possui cadastro no CRIVO. Use a aba Entrar para prosseguir.' });
           }
+          setLoading(false);
+          return;
         } else {
-          toast.error("✗ Erro ao criar conta: " + error.message);
+          setAlertMessage({ type: 'error', text: 'Erro ao criar conta: ' + error.message });
+          setLoading(false);
+          return;
         }
-        return;
       }
       
       // Cadastro novo bem-sucedido
@@ -208,7 +218,7 @@ const Auth = () => {
       navigate("/verificar-email", { state: { email, password, type: "signup" } });
     } catch (error: any) {
       console.error("Auth error:", error);
-      toast.error("✗ Erro ao criar conta");
+      setAlertMessage({ type: 'error', text: 'Erro ao criar conta' });
     } finally {
       setLoading(false);
     }
@@ -235,6 +245,26 @@ const Auth = () => {
             
             <TabsContent value="login">
               <form onSubmit={handleLogin} className="space-y-4">
+                {alertMessage && activeTab === "login" && (
+                  <Alert variant={alertMessage.type === 'error' ? 'destructive' : 'default'} className="mb-4">
+                    <AlertCircle className="h-4 w-4" />
+                    <AlertDescription className="flex items-center justify-between">
+                      <span>{alertMessage.text}</span>
+                      {alertMessage.action && (
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          onClick={alertMessage.action.onClick}
+                          disabled={loading}
+                          className="ml-2 shrink-0"
+                        >
+                          {alertMessage.action.label}
+                        </Button>
+                      )}
+                    </AlertDescription>
+                  </Alert>
+                )}
                 <div className="space-y-2">
                   <Label htmlFor="login-email">E-mail</Label>
                   <Input
@@ -307,6 +337,26 @@ const Auth = () => {
 
             <TabsContent value="register">
               <form onSubmit={handleRegister} className="space-y-4">
+                {alertMessage && activeTab === "register" && (
+                  <Alert variant={alertMessage.type === 'error' ? 'destructive' : 'default'} className="mb-4">
+                    <AlertCircle className="h-4 w-4" />
+                    <AlertDescription className="flex items-center justify-between">
+                      <span>{alertMessage.text}</span>
+                      {alertMessage.action && (
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          onClick={alertMessage.action.onClick}
+                          disabled={loading}
+                          className="ml-2 shrink-0"
+                        >
+                          {alertMessage.action.label}
+                        </Button>
+                      )}
+                    </AlertDescription>
+                  </Alert>
+                )}
                 <div className="space-y-2">
                   <Label htmlFor="register-email">E-mail</Label>
                   <Input
