@@ -59,7 +59,33 @@ const Auth = () => {
       });
       
       if (error) {
-        toast.error("✗ Email ou senha incorretos");
+        // Verificar se é erro de email não confirmado
+        if (error.message.includes("Email not confirmed") || 
+            (error.message.includes("Invalid login credentials") && email)) {
+          toast.error(
+            "Sua conta precisa ser validada por email antes de fazer login.",
+            {
+              duration: 5000,
+              action: {
+                label: "Reenviar código",
+                onClick: async () => {
+                  const { error: resendError } = await supabase.auth.resend({
+                    type: 'signup',
+                    email,
+                  });
+                  if (!resendError) {
+                    toast.success("✓ Novo código enviado para " + email);
+                    navigate("/verificar-email", { state: { email, password, type: "signup" } });
+                  } else {
+                    toast.error("✗ Não foi possível reenviar. Tente novamente.");
+                  }
+                },
+              },
+            }
+          );
+        } else {
+          toast.error("✗ Email ou senha incorretos");
+        }
         return;
       }
       
@@ -124,7 +150,7 @@ const Auth = () => {
     setLoading(true);
 
     try {
-      const { error } = await supabase.auth.signUp({
+      const { data, error } = await supabase.auth.signUp({
         email,
         password,
         options: {
@@ -133,14 +159,51 @@ const Auth = () => {
       });
       
       if (error) {
-        if (error.message.includes("already")) {
-          toast.error("✗ Este email já está cadastrado");
+        if (error.message.includes("already") || error.message.includes("User already registered")) {
+          // Email já existe - verificar se foi confirmado
+          const { data: signInData, error: signInError } = await supabase.auth.signInWithPassword({
+            email,
+            password,
+          });
+          
+          if (signInError) {
+            // Se não conseguiu fazer login, provavelmente o email não foi confirmado
+            if (signInError.message.includes("Email not confirmed") || signInError.message.includes("Invalid login credentials")) {
+              toast.error(
+                "Você já iniciou o cadastro, mas precisa validar seu email antes de continuar.",
+                {
+                  duration: 5000,
+                  action: {
+                    label: "Reenviar código",
+                    onClick: async () => {
+                      const { error: resendError } = await supabase.auth.resend({
+                        type: 'signup',
+                        email,
+                      });
+                      if (!resendError) {
+                        toast.success("✓ Novo código enviado para " + email);
+                        navigate("/verificar-email", { state: { email, password, type: "signup" } });
+                      } else {
+                        toast.error("✗ Não foi possível reenviar. Tente novamente ou use outro email.");
+                      }
+                    },
+                  },
+                }
+              );
+            } else {
+              toast.error("✗ Este email já está cadastrado. Use a aba Entrar.");
+            }
+          } else {
+            // Login funcionou - email já foi confirmado
+            toast.error("✗ Este email já está ativo. Use a aba Entrar.");
+          }
         } else {
           toast.error("✗ Erro ao criar conta: " + error.message);
         }
         return;
       }
       
+      // Cadastro novo bem-sucedido
       toast.success("✓ Código de verificação enviado para " + email);
       navigate("/verificar-email", { state: { email, password, type: "signup" } });
     } catch (error: any) {
