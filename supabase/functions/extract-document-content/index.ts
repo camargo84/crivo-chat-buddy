@@ -77,7 +77,17 @@ serve(async (req) => {
       // Para PDF e Imagens: usar Gemini com base64
       console.log(`[ExtractDocument] 🤖 Processando ${isPDF ? 'PDF' : 'imagem'} com Gemini Vision...`);
       
-      const base64Content = btoa(String.fromCharCode(...new Uint8Array(fileBuffer)));
+      // Converter para base64 em chunks para evitar stack overflow
+      const uint8Array = new Uint8Array(fileBuffer);
+      const CHUNK_SIZE = 8192;
+      let binary = '';
+      
+      for (let i = 0; i < uint8Array.length; i += CHUNK_SIZE) {
+        const chunk = uint8Array.subarray(i, Math.min(i + CHUNK_SIZE, uint8Array.length));
+        binary += String.fromCharCode(...chunk);
+      }
+      
+      const base64Content = btoa(binary);
       
       const extractPrompt = `Analise este ${isPDF ? 'documento PDF' : 'imagem'} detalhadamente e extraia TODO o texto visível.
 
