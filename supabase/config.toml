@@ -2,6 +2,7 @@ project_id = "bzhemiklvmbrpusgwlgb"
 
 [functions.extract-document-content]
 verify_jwt = false
+timeout = 120
 
 [functions.chat-cenario]
 verify_jwt = false

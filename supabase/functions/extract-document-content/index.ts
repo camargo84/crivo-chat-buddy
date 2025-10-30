@@ -1,5 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import JSZip from "https://esm.sh/jszip@3.10.1";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -14,27 +15,71 @@ serve(async (req) => {
   try {
     const { attachmentId, fileUrl, fileType, fileName, projectId } = await req.json();
 
-    const supabase = createClient(Deno.env.get("SUPABASE_URL") ?? "", Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "");
+    console.log(`[ExtractDocument] 📄 Iniciando processamento: ${fileName}`);
+    console.log(`[ExtractDocument] 📋 Tipo: ${fileType}`);
 
-    console.log(`[ExtractDocument] Processando: ${fileName}`);
+    const supabase = createClient(
+      Deno.env.get("SUPABASE_URL") ?? "",
+      Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? ""
+    );
 
     // Baixar arquivo
+    console.log(`[ExtractDocument] 📥 Baixando arquivo...`);
     const fileResponse = await fetch(fileUrl);
-    if (!fileResponse.ok) throw new Error("Erro ao baixar arquivo");
+    if (!fileResponse.ok) {
+      throw new Error(`Erro ao baixar arquivo: ${fileResponse.status}`);
+    }
 
     const fileBuffer = await fileResponse.arrayBuffer();
-    const base64Content = btoa(String.fromCharCode(...new Uint8Array(fileBuffer)));
+    console.log(`[ExtractDocument] ✅ Arquivo baixado: ${fileBuffer.byteLength} bytes`);
 
     const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
+    if (!LOVABLE_API_KEY) {
+      throw new Error("LOVABLE_API_KEY não configurada");
+    }
 
     let extractedText = "";
 
-    // PASSO 1: Detectar tipo de arquivo e escolher método apropriado
+    // Detectar tipo de arquivo
     const isImage = fileType.startsWith("image/");
     const isPDF = fileType === "application/pdf";
     const isDOCX = fileType === "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
+    const isText = fileType === "text/plain" || fileType === "text/csv" || fileType === "text/markdown";
 
-    const extractPrompt = `Analise esta imagem/documento detalhadamente e extraia TODO o texto visível.
+    // ==================== EXTRAÇÃO NATIVA DE TEXTO ====================
+
+    if (isDOCX) {
+      console.log("[ExtractDocument] 📝 Extraindo texto de DOCX com JSZip...");
+      try {
+        const zip = await JSZip.loadAsync(fileBuffer);
+        const xmlFile = zip.file("word/document.xml");
+        
+        if (!xmlFile) {
+          throw new Error("Arquivo DOCX inválido: word/document.xml não encontrado");
+        }
+        
+        const xmlContent = await xmlFile.async("text");
+        const textNodes = xmlContent.match(/<w:t[^>]*>([^<]+)<\/w:t>/g) || [];
+        extractedText = textNodes
+          .map((node) => node.replace(/<[^>]+>/g, ""))
+          .join(" ");
+        
+        console.log(`[ExtractDocument] ✅ DOCX extraído: ${extractedText.length} caracteres`);
+      } catch (e) {
+        console.error("[ExtractDocument] ❌ Erro ao extrair DOCX:", e);
+        throw new Error(`Falha ao extrair texto do DOCX: ${e instanceof Error ? e.message : "Erro desconhecido"}`);
+      }
+    } else if (isText) {
+      console.log("[ExtractDocument] 📄 Decodificando arquivo de texto...");
+      extractedText = new TextDecoder().decode(fileBuffer);
+      console.log(`[ExtractDocument] ✅ Texto decodificado: ${extractedText.length} caracteres`);
+    } else if (isPDF || isImage) {
+      // Para PDF e Imagens: usar Gemini com base64
+      console.log(`[ExtractDocument] 🤖 Processando ${isPDF ? 'PDF' : 'imagem'} com Gemini Vision...`);
+      
+      const base64Content = btoa(String.fromCharCode(...new Uint8Array(fileBuffer)));
+      
+      const extractPrompt = `Analise este ${isPDF ? 'documento PDF' : 'imagem'} detalhadamente e extraia TODO o texto visível.
 
 **Se for documento escaneado/foto de documento:**
 - Aplique OCR para extrair texto (mesmo que manuscrito ou de baixa qualidade)
@@ -62,10 +107,6 @@ serve(async (req) => {
 
 Seja extremamente detalhado e preciso. Extraia TODO o texto, incluindo texto pequeno ou de difícil leitura.`;
 
-    if (isImage) {
-      // Para IMAGENS: usar Gemini Flash Image Preview
-      console.log("[ExtractDocument] Processando imagem com Gemini Flash Image Preview");
-
       const extractResponse = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
         method: "POST",
         headers: {
@@ -73,7 +114,7 @@ Seja extremamente detalhado e preciso. Extraia TODO o texto, incluindo texto peq
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          model: "google/gemini-2.5-pro",
+          model: "google/gemini-2.5-flash",
           messages: [
             {
               role: "user",
@@ -94,68 +135,38 @@ Seja extremamente detalhado e preciso. Extraia TODO o texto, incluindo texto peq
       });
 
       if (!extractResponse.ok) {
+        if (extractResponse.status === 429) {
+          throw new Error("Rate limit atingido. Aguarde alguns segundos e tente novamente.");
+        }
+        if (extractResponse.status === 402) {
+          throw new Error("Créditos Lovable AI insuficientes. Adicione em Settings > Workspace > Usage.");
+        }
         const errorText = await extractResponse.text();
-        console.error("[ExtractDocument] Erro na extração:", errorText);
+        console.error("[ExtractDocument] ❌ Erro na API Gemini:", errorText);
         throw new Error(`Erro na API: ${extractResponse.status} - ${errorText}`);
       }
 
       const extractData = await extractResponse.json();
       extractedText = extractData.choices?.[0]?.message?.content || "";
-    } else if (isPDF || isDOCX) {
-      // Para PDFs e DOCX: processar com Gemini 2.5 Pro (suporta PDF/DOCX nativamente)
-      console.log(`[ExtractDocument] Processando ${isPDF ? "PDF" : "DOCX"} com Gemini 2.5 Pro`);
-
-      const extractResponse = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${LOVABLE_API_KEY}`,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          model: "google/gemini-2.5-pro",
-          messages: [
-            {
-              role: "user",
-              content: [
-                { type: "text", text: extractPrompt },
-                {
-                  type: "image_url",
-                  image_url: {
-                    url: `data:${fileType};base64,${base64Content}`,
-                  },
-                },
-              ],
-            },
-          ],
-          temperature: 0.2,
-          max_tokens: 16384, // Maior para documentos longos
-        }),
-      });
-
-      if (!extractResponse.ok) {
-        const errorText = await extractResponse.text();
-        console.error("[ExtractDocument] Erro na extração:", errorText);
-        throw new Error(`Erro na API: ${extractResponse.status}`);
-      }
-
-      const extractData = await extractResponse.json();
-      extractedText = extractData.choices?.[0]?.message?.content || "";
-      
-      console.log(`[ExtractDocument] ✅ Extraído ${extractedText.length} caracteres de ${fileName}`);
+      console.log(`[ExtractDocument] ✅ ${isPDF ? 'PDF' : 'Imagem'} processado: ${extractedText.length} caracteres extraídos`);
     } else {
-      // Tipo de arquivo não suportado
       throw new Error(`Tipo de arquivo não suportado: ${fileType}`);
     }
 
+    // Validar conteúdo extraído
     if (!extractedText || extractedText.length < 20) {
-      throw new Error("Não foi possível processar o arquivo");
+      console.warn("[ExtractDocument] ⚠️ Conteúdo extraído muito curto");
+      throw new Error("Não foi possível extrair conteúdo significativo do arquivo");
     }
 
-    // PASSO 2: Análise estruturada usando Gemini 2.5 Pro (apenas se há conteúdo real extraído)
+    console.log(`[ExtractDocument] 📊 Total extraído: ${extractedText.length} caracteres`);
+
+    // ==================== ANÁLISE ESTRUTURADA COM IA ====================
+
     let analysisJson;
 
     if (extractedText.length < 50) {
-      // Conteúdo muito curto, criar estrutura básica
+      console.log("[ExtractDocument] ⚠️ Conteúdo muito curto, análise simplificada");
       analysisJson = {
         identificacao: {
           orgao_nome: "Não extraído - informar manualmente",
@@ -163,10 +174,9 @@ Seja extremamente detalhado e preciso. Extraia TODO o texto, incluindo texto peq
         },
         resumo_executivo: `Documento ${fileName} foi anexado. O agente solicitará as informações através das perguntas.`,
       };
-
-      console.log("[ExtractDocument] Conteúdo muito curto, análise simplificada");
     } else {
-      // Fazer análise completa do conteúdo extraído
+      console.log("[ExtractDocument] 🤖 Analisando conteúdo com Gemini Flash...");
+      
       const analysisPrompt = `Analise este documento de contratação pública e estruture em JSON:
 
 {
@@ -247,16 +257,29 @@ ${extractedText.substring(0, 30000)}`;
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          model: "google/gemini-2.5-pro",
+          model: "google/gemini-2.5-flash",
           messages: [{ role: "user", content: analysisPrompt }],
           temperature: 0.3,
           max_tokens: 4096,
         }),
       });
 
+      if (!analysisResponse.ok) {
+        if (analysisResponse.status === 429) {
+          throw new Error("Rate limit atingido durante análise. Aguarde alguns segundos.");
+        }
+        if (analysisResponse.status === 402) {
+          throw new Error("Créditos Lovable AI insuficientes. Adicione em Settings > Workspace > Usage.");
+        }
+        const errorText = await analysisResponse.text();
+        console.error("[ExtractDocument] ❌ Erro na análise:", errorText);
+        throw new Error(`Erro na análise: ${analysisResponse.status}`);
+      }
+
       const analysisData = await analysisResponse.json();
       let analysisText = analysisData.choices?.[0]?.message?.content || "{}";
 
+      // Limpar markdown se houver
       analysisText = analysisText
         .replace(/```json\n?/g, "")
         .replace(/```\n?/g, "")
@@ -264,14 +287,22 @@ ${extractedText.substring(0, 30000)}`;
 
       try {
         analysisJson = JSON.parse(analysisText);
+        console.log("[ExtractDocument] ✅ Análise estruturada gerada com sucesso");
       } catch (e) {
-        console.error("[ExtractDocument] JSON inválido:", e);
-        analysisJson = { resumo_executivo: "Falha ao estruturar análise" };
+        console.error("[ExtractDocument] ❌ JSON inválido retornado pela IA:", e);
+        console.error("[ExtractDocument] 📄 Conteúdo recebido:", analysisText.substring(0, 500));
+        analysisJson = { 
+          resumo_executivo: "Falha ao estruturar análise - formato JSON inválido",
+          erro_parsing: String(e)
+        };
       }
     }
 
-    // Atualizar attachment
-    await supabase
+    // ==================== SALVAR NO BANCO ====================
+
+    console.log("[ExtractDocument] 💾 Salvando no banco de dados...");
+
+    const { error: updateError } = await supabase
       .from("attachments")
       .update({
         extracted_content: extractedText.substring(0, 50000),
@@ -279,20 +310,42 @@ ${extractedText.substring(0, 30000)}`;
       })
       .eq("id", attachmentId);
 
+    if (updateError) {
+      console.error("[ExtractDocument] ❌ Erro ao salvar:", updateError);
+      throw updateError;
+    }
+
     // Incrementar contador
     await supabase.rpc("increment_files_analyzed", { project_id_param: projectId });
 
-    console.log(`[ExtractDocument] ✅ Concluído: ${fileName}`);
+    console.log(`[ExtractDocument] ✅ ✅ ✅ Processamento concluído: ${fileName}`);
+    console.log(`[ExtractDocument] 📊 Resumo: ${extractedText.length} caracteres extraídos`);
 
     return new Response(
-      JSON.stringify({ success: true, extractedLength: extractedText.length, analysis: analysisJson }),
-      { headers: { ...corsHeaders, "Content-Type": "application/json" }, status: 200 },
+      JSON.stringify({ 
+        success: true, 
+        extractedLength: extractedText.length, 
+        analysis: analysisJson 
+      }),
+      { 
+        headers: { ...corsHeaders, "Content-Type": "application/json" }, 
+        status: 200 
+      }
     );
+
   } catch (error) {
-    console.error("[ExtractDocument] ❌ Erro:", error);
+    console.error("[ExtractDocument] ❌ ❌ ❌ ERRO FATAL:", error);
+    console.error("[ExtractDocument] 📋 Stack:", error instanceof Error ? error.stack : "N/A");
+    
     return new Response(
-      JSON.stringify({ success: false, error: error instanceof Error ? error.message : "Erro desconhecido" }),
-      { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+      JSON.stringify({ 
+        success: false, 
+        error: error instanceof Error ? error.message : "Erro desconhecido" 
+      }),
+      { 
+        status: 500, 
+        headers: { ...corsHeaders, "Content-Type": "application/json" } 
+      }
     );
   }
 });
