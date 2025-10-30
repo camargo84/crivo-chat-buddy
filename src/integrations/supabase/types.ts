@@ -265,6 +265,7 @@ export type Database = {
           archived_at: string | null
           archived_by: string | null
           coleta_completa: boolean | null
+          collection_status: Json | null
           completude_score: number | null
           created_at: string | null
           current_enfoque: string | null
@@ -278,6 +279,7 @@ export type Database = {
           name: string
           organization_id: string
           status: string
+          structured_data: Json | null
           synthesis_data: Json | null
           updated_at: string | null
           user_id: string
@@ -287,6 +289,7 @@ export type Database = {
           archived_at?: string | null
           archived_by?: string | null
           coleta_completa?: boolean | null
+          collection_status?: Json | null
           completude_score?: number | null
           created_at?: string | null
           current_enfoque?: string | null
@@ -300,6 +303,7 @@ export type Database = {
           name: string
           organization_id: string
           status?: string
+          structured_data?: Json | null
           synthesis_data?: Json | null
           updated_at?: string | null
           user_id: string
@@ -309,6 +313,7 @@ export type Database = {
           archived_at?: string | null
           archived_by?: string | null
           coleta_completa?: boolean | null
+          collection_status?: Json | null
           completude_score?: number | null
           created_at?: string | null
           current_enfoque?: string | null
@@ -322,6 +327,7 @@ export type Database = {
           name?: string
           organization_id?: string
           status?: string
+          structured_data?: Json | null
           synthesis_data?: Json | null
           updated_at?: string | null
           user_id?: string
@@ -452,6 +458,10 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      increment_files_analyzed: {
+        Args: { project_id_param: string }
+        Returns: undefined
+      }
       search_projects: {
         Args: {
           search_archived?: boolean
@@ -470,6 +480,14 @@ export type Database = {
       }
       show_limit: { Args: never; Returns: number }
       show_trgm: { Args: { "": string }; Returns: string[] }
+      update_collection_progress: {
+        Args: {
+          phase: string
+          project_id_param: string
+          question_number: number
+        }
+        Returns: undefined
+      }
     }
     Enums: {
       [_ in never]: never

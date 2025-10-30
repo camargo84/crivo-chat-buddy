@@ -66,6 +66,14 @@ export const FileUploadArea = ({ projectId, onUploadComplete }: FileUploadAreaPr
     }
   };
 
+  const formatBytes = (bytes: number): string => {
+    if (bytes === 0) return '0 Bytes';
+    const k = 1024;
+    const sizes = ['Bytes', 'KB', 'MB'];
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    return Math.round(bytes / Math.pow(k, i) * 100) / 100 + ' ' + sizes[i];
+  };
+
   const uploadFile = async (file: File, uploadingFile: UploadingFile) => {
     try {
       // 1. Upload to Storage
@@ -82,7 +90,7 @@ export const FileUploadArea = ({ projectId, onUploadComplete }: FileUploadAreaPr
 
       if (uploadError) throw uploadError;
 
-      updateFileStatus(file, { progress: 50, status: "analyzing" });
+      updateFileStatus(file, { progress: 40, status: "analyzing" });
 
       // 2. Get public URL
       const { data: urlData } = supabase.storage
@@ -109,43 +117,120 @@ export const FileUploadArea = ({ projectId, onUploadComplete }: FileUploadAreaPr
 
       if (attachmentError) throw attachmentError;
 
-      updateFileStatus(file, { progress: 75, attachmentId: attachment.id });
+      updateFileStatus(file, { progress: 50, attachmentId: attachment.id });
 
-      // 4. Analyze document with AI if it's an image or PDF
-      if (file.type.startsWith("image/") || file.type.includes("pdf")) {
+      // 4. Create visual message in conversation (processing)
+      const { data: messageData, error: msgError } = await supabase
+        .from('demanda_messages')
+        .insert({
+          demanda_id: projectId,
+          role: 'user',
+          content: `📎 **Anexou arquivo:** ${file.name}\n\n_Tamanho: ${formatBytes(file.size)}_\n_Tipo: ${file.type}_\n\n⏳ Processando documento...`,
+          metadata: { 
+            type: 'attachment',
+            attachment_id: attachment.id,
+            file_name: file.name,
+            file_type: file.type,
+            status: 'processing'
+          }
+        })
+        .select()
+        .single();
+
+      if (msgError) console.error('Erro ao criar mensagem:', msgError);
+
+      updateFileStatus(file, { progress: 60 });
+
+      // 5. Call extraction function for supported types
+      if (file.type.includes("pdf") || file.type.includes("wordprocessing") || file.type.startsWith("image/")) {
         try {
-          const { data: analysisData, error: analysisError } = await supabase.functions.invoke(
-            "analisar-documento",
+          const { data: extractResult, error: extractError } = await supabase.functions.invoke(
+            'extract-document-content',
             {
               body: {
+                attachmentId: attachment.id,
                 fileUrl: urlData.publicUrl,
-                fileName: file.name,
                 fileType: file.type,
-              },
+                fileName: file.name,
+                projectId: projectId
+              }
             }
           );
 
-          if (!analysisError && analysisData?.analysis) {
-            // Update attachment with analysis
-            await supabase
-              .from("attachments")
-              .update({
-                extracted_content: analysisData.analysis.texto_completo || "",
-                analysis_summary: analysisData.analysis.resumo_executivo || "",
-              })
-              .eq("id", attachment.id);
+          if (extractError || !extractResult?.success) {
+            // Update message to error
+            if (messageData) {
+              await supabase
+                .from('demanda_messages')
+                .update({
+                  content: `📎 **Arquivo:** ${file.name}\n\n❌ Não foi possível processar. Erro: ${extractError?.message || 'Desconhecido'}\n\nVocê pode descrever o conteúdo manualmente.`,
+                  metadata: { 
+                    type: 'attachment',
+                    attachment_id: attachment.id,
+                    file_name: file.name,
+                    status: 'error'
+                  }
+                })
+                .eq('id', messageData.id);
+            }
+            
+            toast.error('Erro ao processar documento');
+          } else {
+            // Update message to success
+            if (messageData) {
+              await supabase
+                .from('demanda_messages')
+                .update({
+                  content: `📎 **Arquivo analisado:** ${file.name}\n\n✅ Documento processado com sucesso!\n_${extractResult.extractedLength || 0} caracteres extraídos_\n\n🤖 O agente está revisando as informações...`,
+                  metadata: { 
+                    type: 'attachment',
+                    attachment_id: attachment.id,
+                    file_name: file.name,
+                    status: 'completed',
+                    extracted_length: extractResult.extractedLength
+                  }
+                })
+                .eq('id', messageData.id);
+            }
 
-            attachment.extracted_content = analysisData.analysis.texto_completo;
-            attachment.analysis_summary = analysisData.analysis.resumo_executivo;
+            // Notify agent to review questions
+            await supabase.from('demanda_messages').insert({
+              demanda_id: projectId,
+              role: 'system',
+              content: `SISTEMA: Arquivo "${file.name}" processado. Revisar perguntas e buscar respostas no conteúdo extraído.`,
+              metadata: { 
+                type: 'system_trigger',
+                action: 'review_after_upload',
+                attachment_id: attachment.id
+              }
+            });
+
+            toast.success(`Arquivo ${file.name} processado!`);
           }
-        } catch (analysisErr) {
-          console.error("Erro na análise (não crítico):", analysisErr);
+        } catch (analysisError) {
+          console.error('Erro ao analisar:', analysisError);
         }
+      } else {
+        // For unsupported types, just mark as uploaded
+        if (messageData) {
+          await supabase
+            .from('demanda_messages')
+            .update({
+              content: `📎 **Arquivo anexado:** ${file.name}\n\n✅ Arquivo carregado com sucesso!`,
+              metadata: { 
+                type: 'attachment',
+                attachment_id: attachment.id,
+                file_name: file.name,
+                status: 'completed'
+              }
+            })
+            .eq('id', messageData.id);
+        }
+        toast.success(`Arquivo ${file.name} anexado!`);
       }
 
       updateFileStatus(file, { progress: 100, status: "complete" });
       onUploadComplete(attachment);
-      toast.success(`Arquivo ${file.name} enviado com sucesso!`);
 
       // Remove from list after 2 seconds
       setTimeout(() => {
