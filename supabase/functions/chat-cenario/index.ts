@@ -165,7 +165,8 @@ DIRETRIZES:
 - SEMPRE cite trechos literais ao apresentar informações de arquivos
 - Valide informações importantes
 - Use Markdown (negrito, listas)
-- Termine com uma pergunta clara e específica`;
+- **CRÍTICO:** SEMPRE termine com uma pergunta clara que exija resposta do usuário
+- NUNCA envie mensagens apenas informativas sem solicitar ação/confirmação`;
 
     const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
       method: "POST",
@@ -174,12 +175,12 @@ DIRETRIZES:
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        model: "google/gemini-2.5-flash",
+        model: "openai/gpt-5-mini",
         messages: [
           { role: "system", content: systemPrompt },
           ...messages,
         ],
-        stream: false,
+        max_completion_tokens: 2048,
       }),
     });
 
@@ -214,7 +215,7 @@ DIRETRIZES:
         metadata: {
           phase,
           question_number: questionNumber,
-          model: "google/gemini-2.5-flash",
+          model: "openai/gpt-5-mini",
         },
       })
       .select()
