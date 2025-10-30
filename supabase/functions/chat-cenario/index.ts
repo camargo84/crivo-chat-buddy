@@ -19,63 +19,153 @@ serve(async (req) => {
       throw new Error("LOVABLE_API_KEY não configurada");
     }
 
-    // System prompt para fase de perguntas
-    const systemPrompt = `Você é um especialista sênior em planejamento de contratações públicas brasileiras, com profundo conhecimento da Lei 14.133/2021 (Nova Lei de Licitações), formação em Direito Administrativo e mais de 15 anos de experiência assessorando órgãos públicos.
+    // Buscar documentos anexados e suas análises
+    const supabase = createClient(
+      Deno.env.get("SUPABASE_URL") ?? "",
+      Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? ""
+    );
 
-MISSÃO ATUAL: Conduzir conversa estruturada para coletar informações completas sobre o CENÁRIO da demanda de contratação, seguindo a metodologia Framework CRIVO.
+    const { data: attachments } = await supabase
+      .from("attachments")
+      .select("*")
+      .eq("demanda_id", projectId)
+      .is("deleted_at", null);
 
-METODOLOGIA OBRIGATÓRIA - ESTRUTURA 10+10 PERGUNTAS:
+    // Construir contexto de documentos
+    let documentsContext = "";
+    if (attachments && attachments.length > 0) {
+      documentsContext = "\n\n═════════════════════════════════════════════════════════════════════════\n";
+      documentsContext += "📎 DOCUMENTOS ANEXADOS PELO USUÁRIO - INFORMAÇÕES EXTRAÍDAS:\n";
+      documentsContext += "═════════════════════════════════════════════════════════════════════════\n\n";
+      
+      for (const att of attachments) {
+        documentsContext += `\n📄 **ARQUIVO: ${att.file_name}**\n\n`;
+        
+        if (att.analysis_summary) {
+          try {
+            const analysis = typeof att.analysis_summary === 'string' 
+              ? JSON.parse(att.analysis_summary) 
+              : att.analysis_summary;
+            
+            documentsContext += "**INFORMAÇÕES ESTRUTURADAS IDENTIFICADAS:**\n\n";
+            
+            if (analysis.identificacao) {
+              documentsContext += "🏛️ **ÓRGÃO/ENTIDADE:**\n";
+              if (analysis.identificacao.orgao_nome) documentsContext += `- Nome: ${analysis.identificacao.orgao_nome}\n`;
+              if (analysis.identificacao.orgao_cnpj) documentsContext += `- CNPJ: ${analysis.identificacao.orgao_cnpj}\n`;
+              if (analysis.identificacao.orgao_sigla) documentsContext += `- Sigla: ${analysis.identificacao.orgao_sigla}\n`;
+              if (analysis.identificacao.unidade_demandante) documentsContext += `- Unidade: ${analysis.identificacao.unidade_demandante}\n`;
+            }
+            
+            if (analysis.identificacao?.endereco_completo || analysis.identificacao?.logradouro) {
+              documentsContext += "\n📍 **ENDEREÇO:**\n";
+              if (analysis.identificacao.endereco_completo) documentsContext += `- Completo: ${analysis.identificacao.endereco_completo}\n`;
+              if (analysis.identificacao.logradouro) documentsContext += `- Logradouro: ${analysis.identificacao.logradouro}\n`;
+              if (analysis.identificacao.numero) documentsContext += `- Número: ${analysis.identificacao.numero}\n`;
+              if (analysis.identificacao.bairro) documentsContext += `- Bairro: ${analysis.identificacao.bairro}\n`;
+              if (analysis.identificacao.municipio) documentsContext += `- Município: ${analysis.identificacao.municipio}\n`;
+              if (analysis.identificacao.uf) documentsContext += `- UF: ${analysis.identificacao.uf}\n`;
+              if (analysis.identificacao.cep) documentsContext += `- CEP: ${analysis.identificacao.cep}\n`;
+            }
+            
+            if (analysis.contexto_problema) {
+              documentsContext += "\n🎯 **PROBLEMA/NECESSIDADE:**\n";
+              if (analysis.contexto_problema.situacao_atual) {
+                documentsContext += `${analysis.contexto_problema.situacao_atual}\n`;
+              }
+            }
+            
+            if (analysis.solucao_proposta) {
+              documentsContext += "\n💡 **SOLUÇÃO PROPOSTA:**\n";
+              if (analysis.solucao_proposta.descricao_objeto) {
+                documentsContext += `- Objeto: ${analysis.solucao_proposta.descricao_objeto}\n`;
+              }
+              if (analysis.solucao_proposta.categoria) {
+                documentsContext += `- Categoria: ${analysis.solucao_proposta.categoria}\n`;
+              }
+            }
+            
+            if (analysis.orcamentario_financeiro?.orcamento_estimado) {
+              documentsContext += `\n💰 **ORÇAMENTO:** ${analysis.orcamentario_financeiro.orcamento_estimado}\n`;
+            }
+            
+            if (analysis.aspectos_legais?.normas_aplicaveis?.length > 0) {
+              documentsContext += `\n📜 **NORMAS/LEIS:** ${analysis.aspectos_legais.normas_aplicaveis.join(", ")}\n`;
+            }
+            
+            if (analysis.resumo_executivo) {
+              documentsContext += `\n📋 **RESUMO:** ${analysis.resumo_executivo}\n`;
+            }
+            
+          } catch (e) {
+            console.error("Erro ao parsear analysis_summary:", e);
+          }
+        }
+        
+        documentsContext += "\n" + "─".repeat(70) + "\n";
+      }
+      
+      documentsContext += "\n═════════════════════════════════════════════════════════════════════════\n";
+    }
 
-FASE A - PERGUNTAS UNIVERSAIS (1 a 10):
+    // System prompt INTELIGENTE
+    const systemPrompt = `Você é o Agente Cenário do Framework CRIVO. 🎯
+
+Sua missão: coletar informações COMPLETAS para gerar o Relatório de Cenário de Contratação.
+
+═════════════════════════════════════════════════════════════════════════
+🔴 REGRA FUNDAMENTAL - NUNCA PERGUNTAR O QUE JÁ SABE
+═════════════════════════════════════════════════════════════════════════
+
+Antes de fazer QUALQUER pergunta:
+1. VERIFICAR se a informação já foi extraída de documentos anexados
+2. SE JÁ TEM A INFORMAÇÃO: APRESENTAR + PEDIR CONFIRMAÇÃO
+3. SE NÃO TEM: FAZER A PERGUNTA NORMALMENTE
+
+EXEMPLO CORRETO:
+❌ ERRADO: "Qual é o órgão responsável por esta demanda?"
+✅ CORRETO: "📄 No documento 'Cenario.pdf' identifiquei:
+
+**ÓRGÃO:** Prefeitura Municipal de São Paulo
+**CNPJ:** 46.395.000/0001-39
+
+Esta informação está correta? (Responda 'sim' para confirmar ou corrija se necessário)"
+
+═════════════════════════════════════════════════════════════════════════
+📋 METODOLOGIA - ESTRUTURA 20 PERGUNTAS (10 UNIVERSAIS + 10 ESPECÍFICAS)
+═════════════════════════════════════════════════════════════════════════
+
+ORDEM OBRIGATÓRIA DAS 3 PRIMEIRAS:
+1. ÓRGÃO/ENTIDADE (nome, sigla, CNPJ)
+2. ENDEREÇO completo (onde ocorre o problema)
+3. SITUAÇÃO-PROBLEMA (descrição detalhada)
+
+FASE A - PERGUNTAS UNIVERSAIS (4-10):
 ${phase === "universal" ? `
-Você está na FASE DE PERGUNTAS UNIVERSAIS. Faça as perguntas a seguir, uma por vez:
+PERGUNTA ATUAL: ${questionNumber}/10
 
-1. Qual é a necessidade ou problema que motivou esta demanda de contratação?
-2. Quem são os beneficiários diretos desta contratação? (perfil, quantidade estimada)
-3. Qual o impacto esperado desta contratação no seu órgão ou setor?
-4. Existe alguma legislação específica que regula ou exige esta contratação?
-5. Há urgência legal, técnica ou operacional para esta contratação? Por quê?
-6. Esta contratação se relaciona com algum planejamento estratégico, plano diretor ou programa governamental?
-7. Já houve contratações similares anteriormente no seu órgão? Como foi a experiência?
-8. Existem riscos conhecidos relacionados a esta contratação? (operacionais, legais, financeiros)
-9. Qual é o público-alvo ou área geográfica que será atendida por esta contratação?
-10. Há recursos orçamentários já previstos ou aprovados para esta contratação? Em qual rubrica?
-
-VOCÊ ESTÁ NA PERGUNTA ${questionNumber}/10.
+4. BENEFICIÁRIOS diretos (quem, quantos)
+5. OBJETO da contratação (o que contratar)
+6. ESPECIFICAÇÕES técnicas (características, normas)
+7. JUSTIFICATIVA técnica (por que esta solução)
+8. LEGISLAÇÃO aplicável (leis, decretos)
+9. ORÇAMENTO estimado (valor, fonte)
+10. PRAZO de execução (tempo, urgência)
 ` : `
-FASE B - PERGUNTAS ESPECÍFICAS (11 a 20):
+FASE B - PERGUNTAS ESPECÍFICAS (11-20):
+PERGUNTA ATUAL: ${questionNumber}/20
 
-Você completou as 10 perguntas universais. Agora deve:
-1. ANALISAR profundamente todas as respostas anteriores
-2. IDENTIFICAR lacunas críticas de informação
-3. GERAR perguntas ESPECÍFICAS E CONTEXTUALIZADAS
-
-As perguntas específicas devem ser:
-- Totalmente personalizadas ao cenário descrito
-- Focadas em detalhes técnicos, quantitativos e qualitativos
-- Direcionadas a eliminar ambiguidades
-- Orientadas a extrair informações para subsídio técnico e legal
-
-VOCÊ ESTÁ NA PERGUNTA ${questionNumber}/20.
+Gere perguntas ESPECÍFICAS baseadas no tipo de contratação (obra/serviço/bem) e nas respostas anteriores.
+Foque em: quantitativos, especificações técnicas, prazos detalhados, riscos, alternativas consideradas.
 `}
+${documentsContext}
 
-DIRETRIZES DE CONVERSA:
-- Seja conversacional, empático e consultivo (não interrogativo ou robótico)
-- Se resposta for vaga ou incompleta, faça follow-up para esclarecer
-- Valide informações importantes repetindo para confirmar
-- Se detectar inconsistência, aponte gentilmente e peça esclarecimento
-- Sugira insights baseados em sua expertise quando apropriado
-- Identifique riscos e oportunidades que o usuário pode não ter percebido
-- Referencie legislação aplicável quando relevante (cite número de leis, artigos)
-
-IMPORTANTE:
-- NUNCA invente dados ou informações
-- Se algo não foi informado, pergunte em vez de assumir
-- Mantenha tom profissional mas acessível
-- Demonstre expertise sem ser pedante
-- Seja preciso em citações legais (número correto de leis e artigos)
-- Use formatação Markdown para destacar pontos importantes (negrito, listas)
-- Termine SEMPRE com uma pergunta específica e clara`;
+DIRETRIZES:
+- Tom profissional mas acessível
+- SEMPRE cite trechos literais ao apresentar informações de arquivos
+- Valide informações importantes
+- Use Markdown (negrito, listas)
+- Termine com uma pergunta clara e específica`;
 
     const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
       method: "POST",
@@ -115,11 +205,6 @@ IMPORTANTE:
     const aiMessage = data.choices[0].message.content;
 
     // Salvar mensagem da IA no banco
-    const supabase = createClient(
-      Deno.env.get("SUPABASE_URL") ?? "",
-      Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? ""
-    );
-
     const { data: savedMessage, error: saveError } = await supabase
       .from("demanda_messages")
       .insert({

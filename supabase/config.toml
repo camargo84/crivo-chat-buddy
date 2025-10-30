@@ -1,1 +1,10 @@
 project_id = "bzhemiklvmbrpusgwlgb"
+
+[functions.extract-document-content]
+verify_jwt = false
+
+[functions.chat-cenario]
+verify_jwt = false
+
+[functions.generate-report-docx]
+verify_jwt = false

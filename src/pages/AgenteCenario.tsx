@@ -4,12 +4,13 @@ import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Textarea } from "@/components/ui/textarea";
-import { Progress } from "@/components/ui/progress";
 import { toast } from "sonner";
 import { ArrowLeft, Send, Bot, User, Loader2, FileText, Download, ChevronLeft, ChevronRight } from "lucide-react";
 import { FileUploadArea } from "@/components/FileUploadArea";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import ReactMarkdown from "react-markdown";
+import { CollectionStatus } from "@/components/CollectionStatus";
+import { AttachmentsList } from "@/components/AttachmentsList";
 
 type Message = {
   id: string;
@@ -187,41 +188,21 @@ const AgenteCenario = () => {
 
   const handleGenerateReport = async () => {
     setLoading(true);
-    toast.info("Gerando relatório técnico... Isso pode levar alguns minutos.");
+    toast.info("Gerando relatório técnico... Isso pode levar alguns instantes.");
 
     try {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) throw new Error("Usuário não autenticado");
-
-      const { data: profile } = await supabase
-        .from("user_profiles")
-        .select("*, organizations(*)")
-        .eq("id", user.id)
-        .single();
-
-      const conversationHistory = messages.map((m) => ({
-        role: m.role,
-        content: m.content,
-      }));
-
       const { data: reportData, error: reportError } = await supabase.functions.invoke(
-        "gerar-relatorio-cenario",
+        "generate-report-docx",
         {
           body: {
-            conversationHistory,
-            attachments,
-            projectInfo: {
-              nome: projectName,
-              organizacao: profile?.organization_name,
-              responsavel: profile?.full_name,
-            },
+            projectId: id!,
           },
         }
       );
 
       if (reportError) throw reportError;
 
-      setGeneratedReport(reportData.relatorio);
+      setGeneratedReport(reportData.report);
       setReportMode(true);
       toast.success("✅ Relatório gerado com sucesso!");
     } catch (error: any) {
@@ -276,57 +257,13 @@ const AgenteCenario = () => {
         </div>
 
         {!sidebarCollapsed && (
-          <ScrollArea className="flex-1 p-4">
-            <div className="space-y-4">
-              {/* Progress */}
-              <Card className="p-3">
-                <div className="space-y-2">
-                  <div className="flex items-center justify-between text-xs">
-                    <span className="font-medium">Progresso</span>
-                    <span className="text-muted-foreground">{questionNumber}/20</span>
-                  </div>
-                  <Progress value={totalProgress} className="h-2" />
-                  <div className="flex gap-3 text-xs">
-                    <span className="text-primary">
-                      Universais: {Math.min(questionNumber, 10)}/10
-                    </span>
-                    <span className="text-secondary">
-                      Específicas: {Math.max(0, questionNumber - 10)}/10
-                    </span>
-                  </div>
-                </div>
-              </Card>
+          <ScrollArea className="flex-1">
+            <div className="p-4 space-y-4">
+              {/* Status Integrado */}
+              <CollectionStatus projectId={id!} />
 
               {/* Attachments */}
-              <div>
-                <h3 className="text-sm font-medium mb-2">Documentos Anexados</h3>
-                {attachments.length === 0 ? (
-                  <p className="text-xs text-muted-foreground">
-                    Nenhum documento anexado ainda
-                  </p>
-                ) : (
-                  <div className="space-y-2">
-                    {attachments.map((att) => (
-                      <Card key={att.id} className="p-2">
-                        <div className="flex items-start gap-2">
-                          <FileText className="h-4 w-4 text-primary flex-shrink-0 mt-0.5" />
-                          <div className="flex-1 min-w-0">
-                            <p className="text-xs font-medium truncate">{att.file_name}</p>
-                            <p className="text-xs text-muted-foreground">
-                              {(att.file_size / 1024).toFixed(0)} KB
-                            </p>
-                            {att.analysis_summary && (
-                              <p className="text-xs text-muted-foreground mt-1 line-clamp-2">
-                                {att.analysis_summary}
-                              </p>
-                            )}
-                          </div>
-                        </div>
-                      </Card>
-                    ))}
-                  </div>
-                )}
-              </div>
+              <AttachmentsList projectId={id!} />
 
               {/* Actions */}
               <div className="space-y-2">
