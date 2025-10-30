@@ -32,46 +32,101 @@ serve(async (req) => {
     
     let extractedText = '';
     
-    // PASSO 1: Extrair texto usando GPT-5 Mini com suporte nativo a documentos
+    // PASSO 1: Detectar tipo de arquivo e escolher método apropriado
+    const isImage = fileType.startsWith('image/');
+    const isPDF = fileType === 'application/pdf';
+    const isDOCX = fileType === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
+    
     const extractPrompt = `Extraia TODO o texto deste documento em português, mantendo estrutura, formatação, numeração.
 Inclua: títulos, subtítulos, parágrafos, listas, tabelas, rodapés, artigos, incisos.
 Destaque: órgãos, CNPJs, endereços, telefones, valores, datas.`;
 
-    const extractResponse = await fetch(
-      'https://ai.gateway.lovable.dev/v1/chat/completions',
-      {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${LOVABLE_API_KEY}`,
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({
-          model: 'openai/gpt-5-mini',
-          messages: [{
-            role: 'user',
-            content: [
-              { type: 'text', text: extractPrompt },
-              { 
-                type: 'image_url',
-                image_url: {
-                  url: `data:${fileType};base64,${base64Content}`
+    if (isImage) {
+      // Para IMAGENS: usar Vision API com GPT-5 Mini
+      console.log('[ExtractDocument] Processando imagem com Vision API');
+      
+      const extractResponse = await fetch(
+        'https://ai.gateway.lovable.dev/v1/chat/completions',
+        {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${LOVABLE_API_KEY}`,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            model: 'openai/gpt-5-mini',
+            messages: [{
+              role: 'user',
+              content: [
+                { type: 'text', text: extractPrompt },
+                { 
+                  type: 'image_url',
+                  image_url: {
+                    url: `data:${fileType};base64,${base64Content}`
+                  }
                 }
-              }
-            ]
-          }],
-          max_completion_tokens: 8192
-        })
+              ]
+            }],
+            max_completion_tokens: 8192
+          })
+        }
+      );
+
+      if (!extractResponse.ok) {
+        const errorText = await extractResponse.text();
+        console.error('[ExtractDocument] Erro na extração:', errorText);
+        throw new Error(`Erro na API: ${extractResponse.status} - ${errorText}`);
       }
-    );
 
-    if (!extractResponse.ok) {
-      const errorText = await extractResponse.text();
-      console.error('[ExtractDocument] Erro na extração:', errorText);
-      throw new Error(`Erro na API: ${extractResponse.status} - ${errorText}`);
+      const extractData = await extractResponse.json();
+      extractedText = extractData.choices?.[0]?.message?.content || '';
+      
+    } else if (isPDF || isDOCX) {
+      // Para PDFs e DOCX: usar Claude Sonnet 4.5 que tem suporte nativo
+      console.log(`[ExtractDocument] Processando ${isPDF ? 'PDF' : 'DOCX'} com Claude Sonnet 4.5`);
+      
+      const extractResponse = await fetch(
+        'https://ai.gateway.lovable.dev/v1/chat/completions',
+        {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${LOVABLE_API_KEY}`,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            model: 'anthropic/claude-sonnet-4-5',
+            messages: [{
+              role: 'user',
+              content: [
+                { type: 'text', text: extractPrompt },
+                { 
+                  type: 'document',
+                  source: {
+                    type: 'base64',
+                    media_type: fileType,
+                    data: base64Content
+                  }
+                }
+              ]
+            }],
+            max_tokens: 8192
+          })
+        }
+      );
+
+      if (!extractResponse.ok) {
+        const errorText = await extractResponse.text();
+        console.error('[ExtractDocument] Erro na extração:', errorText);
+        throw new Error(`Erro na API: ${extractResponse.status} - ${errorText}`);
+      }
+
+      const extractData = await extractResponse.json();
+      extractedText = extractData.choices?.[0]?.message?.content || '';
+      
+    } else {
+      // Tipo de arquivo não suportado
+      throw new Error(`Tipo de arquivo não suportado: ${fileType}`);
     }
-
-    const extractData = await extractResponse.json();
-    extractedText = extractData.choices?.[0]?.message?.content || '';
 
     if (!extractedText || extractedText.length < 20) {
       throw new Error('Não foi possível processar o arquivo');
