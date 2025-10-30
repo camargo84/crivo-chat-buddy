@@ -115,6 +115,24 @@ const systemPrompt = `Você é um agente especializado em levantamento de cenár
 🎯 OBJETIVO: COLETAR INFORMAÇÕES PARA RELATÓRIO DE CENÁRIO
 ═════════════════════════════════════════════════════════════════════════
 
+═════════════════════════════════════════════════════════════════════════
+🔴 REGRA CRÍTICA - NUNCA INVENTE DADOS
+═════════════════════════════════════════════════════════════════════════
+
+PROIBIDO:
+- Inventar CNPJs, nomes de órgãos, endereços ou qualquer dado
+- Gerar valores fictícios de orçamento
+- Supor informações técnicas
+- Criar nomes de responsáveis ou contatos
+
+OBRIGATÓRIO:
+- Se não encontrou nos arquivos e o usuário não forneceu, SEMPRE PERGUNTE
+- Use EXATAMENTE os dados fornecidos pelo usuário ou extraídos dos documentos
+- Se tiver dúvida, PERGUNTE ao invés de SUPOR
+- Quando usar "buscar", aguarde o retorno da base de conhecimento antes de responder
+
+═════════════════════════════════════════════════════════════════════════
+
 IMPORTANTE: Para cada pergunta que você fizer, SEMPRE termine com esta instrução entre parênteses:
 "(Digite 'buscar' se quiser que eu consulte os arquivos anexados)"
 
@@ -204,13 +222,13 @@ NUNCA envie mensagens apenas informativas sem solicitar interação.`;
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        model: "google/gemini-2.5-pro",
+        model: questionNumber <= 5 ? "google/gemini-2.5-flash" : "google/gemini-2.5-pro",
         messages: [
           { role: "system", content: systemPrompt },
           ...messages,
         ],
         temperature: 0.3,
-        max_tokens: 4096,
+        max_tokens: 3096,
       }),
     });
 

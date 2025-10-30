@@ -122,8 +122,28 @@ export const FileUploadArea = ({ projectId, onUploadComplete }: FileUploadAreaPr
 
       if (attachmentError) throw attachmentError;
 
+      updateFileStatus(file, { progress: 60, status: "analyzing" });
+
+      // 4. CHAMAR PROCESSAMENTO IMEDIATO EM BACKGROUND
+      supabase.functions
+        .invoke("extract-document-content", {
+          body: {
+            attachmentId: attachment.id,
+            fileUrl: urlData.publicUrl,
+            fileType: file.type,
+            fileName: file.name,
+            projectId: projectId,
+          },
+        })
+        .then(() => {
+          console.log(`✅ Processamento concluído para ${file.name}`);
+        })
+        .catch((err) => {
+          console.warn(`⚠️ Falha no processamento de ${file.name}:`, err);
+        });
+
       // Arquivo anexado com sucesso
-      toast.success(`✅ ${file.name} anexado e pronto para consulta!`);
+      toast.success(`✅ ${file.name} anexado! Processando conteúdo...`);
 
       updateFileStatus(file, { progress: 100, status: "complete" });
       onUploadComplete(attachment);

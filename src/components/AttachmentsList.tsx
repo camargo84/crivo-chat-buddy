@@ -128,6 +128,17 @@ export function AttachmentsList({ projectId }: Props) {
               <span className="text-xs text-muted-foreground">
                 {formatBytes(att.file_size)}
               </span>
+              
+              {/* Status de processamento */}
+              {!att.extracted_content ? (
+                <span className="text-xs text-yellow-600 dark:text-yellow-500 block mt-1">
+                  ⏳ Processando...
+                </span>
+              ) : (
+                <span className="text-xs text-green-600 dark:text-green-500 block mt-1">
+                  ✅ Pronto para consulta
+                </span>
+              )}
             </div>
           </div>
           

@@ -512,23 +512,29 @@ _(Digite "buscar" se quiser que eu consulte os arquivos anexados)_`,
                   projectId={id!}
                   onUploadComplete={(file) => {
                     setAttachments((prev) => [...prev, file]);
-                    toast.success(`Documento ${file.file_name} anexado!`);
                   }}
                 />
-                <Textarea
-                  placeholder="Digite sua resposta, 'buscar' para consultar arquivos, ou 'pronto para começar'..."
-                  value={input}
-                  onChange={(e) => setInput(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter" && !e.shiftKey) {
-                      e.preventDefault();
-                      handleSend();
-                    }
-                  }}
-                  disabled={sending}
-                  rows={2}
-                  className="flex-1 resize-none"
-                />
+                <div className="flex-1 relative">
+                  <Textarea
+                    value={input}
+                    onChange={(e) => setInput(e.target.value)}
+                    placeholder="Digite sua resposta... (ou digite 'buscar' para consultar arquivos)"
+                    className="resize-none pr-16"
+                    rows={2}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter" && e.ctrlKey) {
+                        e.preventDefault();
+                        handleSend();
+                      }
+                    }}
+                    disabled={sending}
+                  />
+                  <div className="absolute bottom-2 right-2 text-xs text-muted-foreground">
+                    {input.length > 0 && `${input.length} | `}
+                    {input.trim().toLowerCase() === "buscar" ? "🔍 " : ""}
+                    Ctrl+Enter
+                  </div>
+                </div>
                 <Button onClick={handleSend} disabled={sending || !input.trim()} size="lg">
                   {sending ? (
                     <Loader2 className="h-5 w-5 animate-spin" />

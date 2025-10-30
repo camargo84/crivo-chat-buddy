@@ -21,101 +21,48 @@ serve(async (req) => {
 
     console.log(`[RAG] Buscando resposta para: "${question}"`);
 
-    // Buscar todos os arquivos anexados (SEM exigir extracted_content)
-    const { data: attachments } = await supabase
+    // Buscar arquivos com conteúdo JÁ EXTRAÍDO
+    const { data: attachments, error: fetchError } = await supabase
       .from("attachments")
       .select("*")
       .eq("demanda_id", demanda_id)
-      .is("deleted_at", null);
+      .is("deleted_at", null)
+      .not("extracted_content", "is", null)
+      .order("created_at", { ascending: false });
+
+    if (fetchError) {
+      console.error("[RAG] Erro ao buscar attachments:", fetchError);
+      throw fetchError;
+    }
 
     if (!attachments || attachments.length === 0) {
+      console.log("[RAG] Nenhum arquivo processado encontrado");
       return new Response(
         JSON.stringify({
           found: false,
-          answer: `Você ainda não anexou nenhum arquivo. 
+          answer: `Você ainda não anexou nenhum arquivo processado, ou o processamento ainda está em andamento.
           
-Por favor, use o botão de clipe 📎 para anexar documentos relacionados à demanda (editais, termos de referência, estudos, plantas, fotos, etc.).
+💡 **Aguarde alguns segundos** após o upload para que os documentos sejam analisados.
 
-Após anexar os arquivos, digite 'buscar' novamente e eu consultarei o conteúdo para responder à pergunta.`,
+Se já anexou há mais de 1 minuto e continua vendo esta mensagem, pode haver um problema no processamento. Tente anexar novamente em formatos mais simples (PDF de texto, PNG, DOCX).`,
           source_file: null,
         }),
         { headers: { ...corsHeaders, "Content-Type": "application/json" }, status: 200 }
       );
     }
 
-    console.log(`[RAG] Encontrados ${attachments.length} arquivos. Processando em tempo real...`);
+    // Montar contexto com conteúdo já extraído
+    let documentsContext = "=== BASE DE CONHECIMENTO ===\n\n";
 
-    // Baixar e processar arquivos em tempo real
-    let documentsContext = "DOCUMENTOS DISPONÍVEIS:\n\n";
-    
     for (const att of attachments) {
-      try {
-        console.log(`[RAG] Baixando arquivo: ${att.file_name}`);
-        
-        // Baixar arquivo do Storage
-        const fileResponse = await fetch(att.storage_url);
-        if (!fileResponse.ok) {
-          console.error(`[RAG] Erro ao baixar ${att.file_name}`);
-          continue;
-        }
-
-        const fileBlob = await fileResponse.blob();
-        const buffer = await fileBlob.arrayBuffer();
-        const base64Content = btoa(String.fromCharCode(...new Uint8Array(buffer)));
-
-        console.log(`[RAG] Extraindo conteúdo de ${att.file_name} com Gemini 2.5 Pro...`);
-
-        // Extrair conteúdo com Gemini 2.5 Pro
-        const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
-        const extractResponse = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
-          method: "POST",
-          headers: {
-            Authorization: `Bearer ${LOVABLE_API_KEY}`,
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({
-            model: "google/gemini-2.5-pro",
-            messages: [
-              {
-                role: "user",
-                content: [
-                  {
-                    type: "text",
-                    text: `Extraia TODO o texto deste documento. Mantenha a estrutura original e seja completo.`
-                  },
-                  {
-                    type: "image_url",
-                    image_url: {
-                      url: `data:${att.file_type};base64,${base64Content}`
-                    }
-                  }
-                ]
-              }
-            ],
-            temperature: 0.1,
-            max_tokens: 8192,
-          }),
-        });
-
-        if (extractResponse.ok) {
-          const extractData = await extractResponse.json();
-          const extractedText = extractData.choices[0].message.content;
-          
-          documentsContext += `=== ARQUIVO: ${att.file_name} ===\n`;
-          documentsContext += `${extractedText}\n\n`;
-          documentsContext += "---\n\n";
-          
-          console.log(`[RAG] ✅ Conteúdo extraído de ${att.file_name}`);
-        } else {
-          console.error(`[RAG] Falha na extração de ${att.file_name}`);
-        }
-
-      } catch (error) {
-        console.error(`[RAG] Erro ao processar ${att.file_name}:`, error);
-      }
+      documentsContext += `📄 ARQUIVO: ${att.file_name}\n`;
+      documentsContext += `CONTEÚDO:\n${att.extracted_content}\n\n`;
+      documentsContext += "---\n\n";
     }
 
-    if (documentsContext === "DOCUMENTOS DISPONÍVEIS:\n\n") {
+    console.log(`[RAG] Contexto montado com ${attachments.length} arquivo(s)`);
+
+    if (documentsContext === "=== BASE DE CONHECIMENTO ===\n\n") {
       return new Response(
         JSON.stringify({
           found: false,
@@ -138,25 +85,24 @@ Você poderia fornecer a resposta diretamente?`,
       );
     }
 
-    // Usar Gemini 2.5 Pro para buscar a resposta
+    // Usar Gemini Flash para buscar a resposta (mais rápido e econômico)
     const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
 
-    const ragPrompt = `Você é um assistente especializado em buscar informações específicas em documentos de contratação pública.
+    const ragPrompt = `Você é um assistente especializado em análise de documentos de contratação pública.
 
 PERGUNTA DO USUÁRIO:
 "${question}"
 
+DOCUMENTOS DISPONÍVEIS:
 ${documentsContext}
 
 INSTRUÇÕES:
-1. Procure a resposta específica à pergunta nos documentos acima
-2. Se encontrar, cite o nome do arquivo e transcreva literalmente o trecho relevante
-3. Se NÃO encontrar informação suficiente, indique claramente que não foi encontrado
-4. Seja preciso e objetivo
+1. Procure a resposta exata nos documentos
+2. Se encontrar, cite o arquivo de origem e copie o texto exato
+3. Se não encontrar, responda: "Não encontrei essa informação nos documentos anexados"
+4. NUNCA invente ou suponha informações que não estão nos documentos
 
-FORMATO DA RESPOSTA:
-- Se encontrou: "No arquivo [NOME], encontrei: [TRECHO LITERAL]. [Explicação se necessário]"
-- Se não encontrou: "Não encontrei informação específica sobre isso nos arquivos anexados."`;
+Responda de forma clara e objetiva.`;
 
     const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
       method: "POST",
@@ -165,10 +111,10 @@ FORMATO DA RESPOSTA:
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        model: "google/gemini-2.5-pro",
+        model: "google/gemini-2.5-flash",
         messages: [{ role: "user", content: ragPrompt }],
         temperature: 0.3,
-        max_tokens: 1024,
+        max_tokens: 2048,
       }),
     });
 
