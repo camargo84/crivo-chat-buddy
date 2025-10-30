@@ -89,33 +89,56 @@ serve(async (req) => {
       
       const base64Content = btoa(binary);
       
-      const extractPrompt = `Analise este ${isPDF ? 'documento PDF' : 'imagem'} detalhadamente e extraia TODO o texto visível.
+      const extractPrompt = isPDF 
+        ? `Você está analisando um PDF que pode conter:
+1. Texto selecionável (PDF nativo)
+2. Páginas escaneadas (imagens dentro do PDF)
+3. Combinação de ambos
+
+MISSÃO: Extrair TODO o texto visível usando OCR quando necessário.
+
+**INSTRUÇÕES ESPECÍFICAS PARA PDF:**
+- Leia e transcreva TODAS as páginas do documento
+- Se houver páginas escaneadas, aplique OCR completo
+- Mantenha a ordem das páginas e estrutura do documento
+- Preserve numeração de páginas se visível
+- Identifique: títulos, subtítulos, parágrafos, listas, tabelas, rodapés
+- Destaque informações críticas: órgãos, CNPJs, endereços, valores, datas
+- Transcreva artigos, incisos e parágrafos com numeração legal
+- Se houver tabelas, mantenha estrutura de linhas/colunas
+- Se houver assinaturas ou carimbos, mencione sua presença
+- Para cada página, indique claramente "=== PÁGINA X ===" antes do conteúdo
+
+**QUALIDADE DO OCR:**
+- Leia texto mesmo em baixa resolução
+- Interprete texto manuscrito quando possível
+- Transcreva números, códigos e valores com precisão
+- Não omita nenhum texto, mesmo pequeno ou em rodapé
+
+Retorne APENAS o texto extraído, sem comentários ou análises.`
+        : `Analise esta imagem detalhadamente e extraia TODO o texto visível.
 
 **Se for documento escaneado/foto de documento:**
 - Aplique OCR para extrair texto (mesmo que manuscrito ou de baixa qualidade)
 - Mantenha estrutura, formatação, numeração, tabelas
 - Identifique: títulos, subtítulos, parágrafos, listas, rodapés, assinaturas
 - Destaque: órgãos, CNPJs, endereços, telefones, e-mails, valores, datas
-- Transcreva artigos, incisos, parágrafos com numeração
 
 **Se for planta/diagrama/croqui técnico:**
 - Descreva o que está representado
 - Identifique medidas, cotas, legendas
 - Liste elementos técnicos (portas, janelas, equipamentos, etc.)
-- Mencione escalas se houver
 
 **Se for foto de local/situação:**
 - Descreva o que está visível
 - Identifique problemas aparentes (deterioração, danos, etc.)
 - Mencione condições do local
-- Liste elementos relevantes para uma obra ou serviço
 
 **Se for tabela/planilha:**
-- Transcreva todos os dados mantendo estrutura de linhas e colunas
+- Transcreva todos os dados mantendo estrutura
 - Identifique cabeçalhos e totais
-- Preserve formatação de valores (R$, %, etc.)
 
-Seja extremamente detalhado e preciso. Extraia TODO o texto, incluindo texto pequeno ou de difícil leitura.`;
+Retorne APENAS o texto extraído, sem comentários.`;
 
       const extractResponse = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
         method: "POST",
