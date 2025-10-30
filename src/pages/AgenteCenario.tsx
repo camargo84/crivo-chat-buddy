@@ -342,9 +342,6 @@ const AgenteCenario = () => {
               {/* Status Integrado */}
               <CollectionStatus projectId={id!} />
 
-              {/* Attachments */}
-              <AttachmentsList projectId={id!} />
-
               {/* Actions */}
               <div className="space-y-2">
                 <Button
@@ -381,9 +378,11 @@ const AgenteCenario = () => {
       <div className="flex-1 flex flex-col">
         {/* Header */}
         <header className="border-b bg-card px-6 py-4">
-          <h1 className="text-xl font-bold">
+          <h1 className="text-xl font-bold mb-3">
             {reportMode ? "Relatório de Cenário" : "Conversa com Agente Cenário"}
           </h1>
+          {/* Área de Arquivos Anexados - Estilo ChatGPT */}
+          {!reportMode && <AttachmentsList projectId={id!} />}
         </header>
 
         {/* Content */}

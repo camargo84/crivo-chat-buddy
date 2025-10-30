@@ -1,7 +1,5 @@
 import { useEffect, useState } from 'react';
-import { FileText, Download, CheckCircle, Clock } from 'lucide-react';
-import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
+import { FileText, Image as ImageIcon } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 
 interface Props {
@@ -53,55 +51,34 @@ export function AttachmentsList({ projectId }: Props) {
     return Math.round(bytes / Math.pow(k, i) * 100) / 100 + ' ' + sizes[i];
   };
 
-  if (loading) return <div className="p-4 text-sm text-muted-foreground">Carregando...</div>;
+  const getFileIcon = (type: string) => {
+    if (type.startsWith('image/')) return '🖼️';
+    return '📄';
+  };
+
+  if (loading) return null;
   if (attachments.length === 0) return null;
 
   return (
-    <div className="border-t border-border p-4">
-      <h3 className="font-semibold text-sm text-foreground mb-3 flex items-center gap-2">
-        <FileText className="w-4 h-4" />
-        Documentos Anexados ({attachments.length})
-      </h3>
-      
-      <div className="space-y-2">
-        {attachments.map((att) => (
-          <div 
-            key={att.id} 
-            className="flex items-start gap-2 p-3 bg-accent rounded-lg hover:bg-accent/80 transition-colors"
-          >
-            <FileText className="w-4 h-4 text-primary mt-1 shrink-0" />
+    <div className="flex gap-2 overflow-x-auto pb-2">
+      {attachments.map((att) => (
+        <div 
+          key={att.id} 
+          className="flex-shrink-0 p-3 bg-card border border-border rounded-lg min-w-[180px]"
+        >
+          <div className="flex items-start gap-2">
+            <span className="text-2xl">{getFileIcon(att.file_type)}</span>
             <div className="flex-1 min-w-0">
               <p className="text-sm font-medium text-foreground truncate">
                 {att.file_name}
               </p>
-              <div className="flex items-center gap-2 mt-1 flex-wrap">
-                <span className="text-xs text-muted-foreground">
-                  {formatBytes(att.file_size)}
-                </span>
-                {att.extracted_content ? (
-                  <Badge variant="default" className="text-xs gap-1">
-                    <CheckCircle className="w-3 h-3" />
-                    Analisado
-                  </Badge>
-                ) : (
-                  <Badge variant="secondary" className="text-xs gap-1">
-                    <Clock className="w-3 h-3" />
-                    Processando
-                  </Badge>
-                )}
-              </div>
+              <span className="text-xs text-muted-foreground">
+                {formatBytes(att.file_size)}
+              </span>
             </div>
-            <Button
-              variant="ghost"
-              size="sm"
-              className="shrink-0"
-              onClick={() => window.open(att.storage_url, '_blank')}
-            >
-              <Download className="w-4 h-4" />
-            </Button>
           </div>
-        ))}
-      </div>
+        </div>
+      ))}
     </div>
   );
 }

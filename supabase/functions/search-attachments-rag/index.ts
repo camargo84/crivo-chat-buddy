@@ -21,31 +21,105 @@ serve(async (req) => {
 
     console.log(`[RAG] Buscando resposta para: "${question}"`);
 
-    // Buscar todos os arquivos com conteúdo extraído
+    // Buscar todos os arquivos anexados (SEM exigir extracted_content)
     const { data: attachments } = await supabase
       .from("attachments")
       .select("*")
       .eq("demanda_id", demanda_id)
-      .not("extracted_content", "is", null)
       .is("deleted_at", null);
 
     if (!attachments || attachments.length === 0) {
       return new Response(
         JSON.stringify({
           found: false,
-          answer: "Nenhum arquivo com conteúdo extraído disponível para consulta.",
+          answer: "Você ainda não anexou nenhum arquivo. Por favor, anexe documentos para que eu possa consultá-los.",
           source_file: null,
         }),
         { headers: { ...corsHeaders, "Content-Type": "application/json" }, status: 200 }
       );
     }
 
-    // Construir contexto dos documentos
+    console.log(`[RAG] Encontrados ${attachments.length} arquivos. Processando em tempo real...`);
+
+    // Baixar e processar arquivos em tempo real
     let documentsContext = "DOCUMENTOS DISPONÍVEIS:\n\n";
+    
     for (const att of attachments) {
-      documentsContext += `=== ARQUIVO: ${att.file_name} ===\n`;
-      documentsContext += `${att.extracted_content}\n\n`;
-      documentsContext += "---\n\n";
+      try {
+        console.log(`[RAG] Baixando arquivo: ${att.file_name}`);
+        
+        // Baixar arquivo do Storage
+        const fileResponse = await fetch(att.storage_url);
+        if (!fileResponse.ok) {
+          console.error(`[RAG] Erro ao baixar ${att.file_name}`);
+          continue;
+        }
+
+        const fileBlob = await fileResponse.blob();
+        const buffer = await fileBlob.arrayBuffer();
+        const base64Content = btoa(String.fromCharCode(...new Uint8Array(buffer)));
+
+        console.log(`[RAG] Extraindo conteúdo de ${att.file_name} com Gemini 2.5 Pro...`);
+
+        // Extrair conteúdo com Gemini 2.5 Pro
+        const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
+        const extractResponse = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${LOVABLE_API_KEY}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            model: "google/gemini-2.5-pro",
+            messages: [
+              {
+                role: "user",
+                content: [
+                  {
+                    type: "text",
+                    text: `Extraia TODO o texto deste documento. Mantenha a estrutura original e seja completo.`
+                  },
+                  {
+                    type: "image_url",
+                    image_url: {
+                      url: `data:${att.file_type};base64,${base64Content}`
+                    }
+                  }
+                ]
+              }
+            ],
+            temperature: 0.1,
+            max_tokens: 8192,
+          }),
+        });
+
+        if (extractResponse.ok) {
+          const extractData = await extractResponse.json();
+          const extractedText = extractData.choices[0].message.content;
+          
+          documentsContext += `=== ARQUIVO: ${att.file_name} ===\n`;
+          documentsContext += `${extractedText}\n\n`;
+          documentsContext += "---\n\n";
+          
+          console.log(`[RAG] ✅ Conteúdo extraído de ${att.file_name}`);
+        } else {
+          console.error(`[RAG] Falha na extração de ${att.file_name}`);
+        }
+
+      } catch (error) {
+        console.error(`[RAG] Erro ao processar ${att.file_name}:`, error);
+      }
+    }
+
+    if (documentsContext === "DOCUMENTOS DISPONÍVEIS:\n\n") {
+      return new Response(
+        JSON.stringify({
+          found: false,
+          answer: "Não consegui processar os arquivos anexados no momento. Você poderia fornecer a resposta diretamente?",
+          source_file: null,
+        }),
+        { headers: { ...corsHeaders, "Content-Type": "application/json" }, status: 200 }
+      );
     }
 
     // Usar Gemini 2.5 Pro para buscar a resposta
