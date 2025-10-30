@@ -42,8 +42,8 @@ Inclua: títulos, subtítulos, parágrafos, listas, tabelas, rodapés, artigos, 
 Destaque: órgãos, CNPJs, endereços, telefones, valores, datas.`;
 
     if (isImage) {
-      // Para IMAGENS: usar Vision API com GPT-5 Mini
-      console.log('[ExtractDocument] Processando imagem com Vision API');
+      // Para IMAGENS: usar Gemini Flash Image Preview
+      console.log('[ExtractDocument] Processando imagem com Gemini Flash Image Preview');
       
       const extractResponse = await fetch(
         'https://ai.gateway.lovable.dev/v1/chat/completions',
@@ -54,7 +54,7 @@ Destaque: órgãos, CNPJs, endereços, telefones, valores, datas.`;
             'Content-Type': 'application/json'
           },
           body: JSON.stringify({
-            model: 'openai/gpt-5-mini',
+            model: 'google/gemini-2.5-flash',
             messages: [{
               role: 'user',
               content: [
@@ -63,48 +63,6 @@ Destaque: órgãos, CNPJs, endereços, telefones, valores, datas.`;
                   type: 'image_url',
                   image_url: {
                     url: `data:${fileType};base64,${base64Content}`
-                  }
-                }
-              ]
-            }],
-            max_completion_tokens: 8192
-          })
-        }
-      );
-
-      if (!extractResponse.ok) {
-        const errorText = await extractResponse.text();
-        console.error('[ExtractDocument] Erro na extração:', errorText);
-        throw new Error(`Erro na API: ${extractResponse.status} - ${errorText}`);
-      }
-
-      const extractData = await extractResponse.json();
-      extractedText = extractData.choices?.[0]?.message?.content || '';
-      
-    } else if (isPDF || isDOCX) {
-      // Para PDFs e DOCX: usar Claude Sonnet 4.5 que tem suporte nativo
-      console.log(`[ExtractDocument] Processando ${isPDF ? 'PDF' : 'DOCX'} com Claude Sonnet 4.5`);
-      
-      const extractResponse = await fetch(
-        'https://ai.gateway.lovable.dev/v1/chat/completions',
-        {
-          method: 'POST',
-          headers: {
-            'Authorization': `Bearer ${LOVABLE_API_KEY}`,
-            'Content-Type': 'application/json'
-          },
-          body: JSON.stringify({
-            model: 'anthropic/claude-sonnet-4-5',
-            messages: [{
-              role: 'user',
-              content: [
-                { type: 'text', text: extractPrompt },
-                { 
-                  type: 'document',
-                  source: {
-                    type: 'base64',
-                    media_type: fileType,
-                    data: base64Content
                   }
                 }
               ]
@@ -123,6 +81,24 @@ Destaque: órgãos, CNPJs, endereços, telefones, valores, datas.`;
       const extractData = await extractResponse.json();
       extractedText = extractData.choices?.[0]?.message?.content || '';
       
+    } else if (isPDF || isDOCX) {
+      // Para PDFs e DOCX: criar placeholder até implementar processamento completo
+      console.log(`[ExtractDocument] Arquivo ${isPDF ? 'PDF' : 'DOCX'} recebido - aguardando entrada manual`);
+      
+      extractedText = `[Documento ${isPDF ? 'PDF' : 'DOCX'}: ${fileName}]
+
+📄 Arquivo anexado com sucesso!
+
+O agente irá coletar as informações necessárias através das perguntas.
+Por favor, responda às perguntas do agente com base no conteúdo deste documento.
+
+Informações do arquivo:
+- Nome: ${fileName}
+- Tipo: ${isPDF ? 'PDF' : 'Word (.docx)'}
+- Tamanho: ${(fileBuffer.byteLength / 1024).toFixed(2)} KB
+
+Você pode baixar o arquivo a qualquer momento através da barra lateral.`;
+      
     } else {
       // Tipo de arquivo não suportado
       throw new Error(`Tipo de arquivo não suportado: ${fileType}`);
@@ -132,10 +108,24 @@ Destaque: órgãos, CNPJs, endereços, telefones, valores, datas.`;
       throw new Error('Não foi possível processar o arquivo');
     }
 
-    console.log(`[ExtractDocument] Extraídos ${extractedText.length} caracteres`);
-
-    // PASSO 2: Análise estruturada usando GPT-5 Mini
-    const analysisPrompt = `Analise este documento de contratação pública e estruture em JSON:
+    // PASSO 2: Análise estruturada usando GPT-5 Mini (apenas se há conteúdo real extraído)
+    let analysisJson;
+    
+    if (isPDF || isDOCX || extractedText.startsWith('[Documento')) {
+      // Para arquivos que não foram totalmente processados, criar estrutura básica
+      analysisJson = {
+        identificacao: {
+          orgao_nome: "Não extraído - informar manualmente",
+          observacao: `Arquivo ${fileName} anexado. Informações serão coletadas via perguntas.`
+        },
+        resumo_executivo: `Documento ${fileName} foi anexado. O agente solicitará as informações através das perguntas.`
+      };
+      
+      console.log('[ExtractDocument] Análise simplificada para arquivo não processado');
+      
+    } else {
+      // Para imagens com conteúdo extraído, fazer análise completa
+      const analysisPrompt = `Analise este documento de contratação pública e estruture em JSON:
 
 {
   "identificacao": {
@@ -208,33 +198,33 @@ IMPORTANTE: Retorne APENAS JSON puro, sem markdown.
 Documento:
 ${extractedText.substring(0, 30000)}`;
 
-    const analysisResponse = await fetch(
-      'https://ai.gateway.lovable.dev/v1/chat/completions',
-      {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${LOVABLE_API_KEY}`,
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({
-          model: 'openai/gpt-5-mini',
-          messages: [{ role: 'user', content: analysisPrompt }],
-          max_completion_tokens: 4096
-        })
+      const analysisResponse = await fetch(
+        'https://ai.gateway.lovable.dev/v1/chat/completions',
+        {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${LOVABLE_API_KEY}`,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            model: 'openai/gpt-5-mini',
+            messages: [{ role: 'user', content: analysisPrompt }],
+            max_completion_tokens: 4096
+          })
+        }
+      );
+
+      const analysisData = await analysisResponse.json();
+      let analysisText = analysisData.choices?.[0]?.message?.content || '{}';
+      
+      analysisText = analysisText.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
+
+      try {
+        analysisJson = JSON.parse(analysisText);
+      } catch (e) {
+        console.error('[ExtractDocument] JSON inválido:', e);
+        analysisJson = { resumo_executivo: "Falha ao estruturar análise" };
       }
-    );
-
-    const analysisData = await analysisResponse.json();
-    let analysisText = analysisData.choices?.[0]?.message?.content || '{}';
-    
-    analysisText = analysisText.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
-
-    let analysisJson;
-    try {
-      analysisJson = JSON.parse(analysisText);
-    } catch (e) {
-      console.error('[ExtractDocument] JSON inválido:', e);
-      analysisJson = { resumo_executivo: "Falha ao estruturar análise" };
     }
 
     // Atualizar attachment
