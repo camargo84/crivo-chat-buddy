@@ -17,6 +17,7 @@ serve(async (req) => {
 
     console.log(`[ExtractDocument] 📄 Iniciando processamento: ${fileName}`);
     console.log(`[ExtractDocument] 📋 Tipo: ${fileType}`);
+    console.log(`[ExtractDocument] 🆔 Attachment ID: ${attachmentId}`);
 
     const supabase = createClient(
       Deno.env.get("SUPABASE_URL") ?? "",
@@ -46,6 +47,8 @@ serve(async (req) => {
     const isDOCX = fileType === "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
     const isText = fileType === "text/plain" || fileType === "text/csv" || fileType === "text/markdown";
 
+    console.log(`[ExtractDocument] 🔍 Tipo detectado: ${isImage ? 'IMAGEM' : isPDF ? 'PDF' : isDOCX ? 'DOCX' : isText ? 'TEXTO' : 'DESCONHECIDO'}`);
+
     // ==================== EXTRAÇÃO NATIVA DE TEXTO ====================
 
     if (isDOCX) {
@@ -73,11 +76,40 @@ serve(async (req) => {
       console.log("[ExtractDocument] 📄 Decodificando arquivo de texto...");
       extractedText = new TextDecoder().decode(fileBuffer);
       console.log(`[ExtractDocument] ✅ Texto decodificado: ${extractedText.length} caracteres`);
-    } else if (isPDF || isImage) {
-      // Para PDF e Imagens: usar Gemini com base64
-      console.log(`[ExtractDocument] 🤖 Processando ${isPDF ? 'PDF' : 'imagem'} com Gemini Vision...`);
+    } else if (isPDF) {
+      // ==================== PDFs - LIMITAÇÃO CONHECIDA ====================
+      console.error("[ExtractDocument] ❌ PDF detectado mas não suportado");
+      console.error("[ExtractDocument] ℹ️ Motivo: Lovable AI Gateway não aceita PDFs via image_url");
+      console.error("[ExtractDocument] 💡 Solução: Converta para DOCX ou extraia como imagens");
       
-      // Converter para base64 em chunks para evitar stack overflow
+      // Salvar mensagem de erro no banco
+      await supabase
+        .from("attachments")
+        .update({
+          extracted_content: "[ERRO] Arquivos PDF não são suportados no momento. Por favor, converta para DOCX ou envie como imagem.",
+          analysis_summary: JSON.stringify({
+            erro: "PDF_NOT_SUPPORTED",
+            mensagem: "PDFs não podem ser processados automaticamente. Converta para DOCX ou imagem.",
+            tipo_arquivo: fileType,
+            nome_arquivo: fileName
+          }, null, 2)
+        })
+        .eq("id", attachmentId);
+      
+      return new Response(
+        JSON.stringify({ 
+          success: false, 
+          error: "PDFs não suportados. Converta para DOCX ou imagem." 
+        }),
+        { 
+          status: 400, 
+          headers: { ...corsHeaders, "Content-Type": "application/json" } 
+        }
+      );
+    } else if (isImage) {
+      // ==================== IMAGENS COM GEMINI VISION ====================
+      console.log("[ExtractDocument] 🖼️ Processando imagem com Gemini Vision...");
+      
       const uint8Array = new Uint8Array(fileBuffer);
       const CHUNK_SIZE = 8192;
       let binary = '';
@@ -88,59 +120,27 @@ serve(async (req) => {
       }
       
       const base64Content = btoa(binary);
+      console.log(`[ExtractDocument] 📦 Base64 gerado: ${base64Content.length} caracteres`);
       
-      const extractPrompt = isPDF 
-        ? `Você está analisando um PDF que pode conter:
-1. Texto selecionável (PDF nativo)
-2. Páginas escaneadas (imagens dentro do PDF)
-3. Combinação de ambos
+      const imagePrompt = `Analise esta imagem e extraia TODO o texto visível.
 
-MISSÃO: Extrair TODO o texto visível usando OCR quando necessário.
+**Se for documento escaneado:**
+- Aplique OCR completo
+- Mantenha estrutura e formatação
+- Destaque: órgãos, CNPJs, endereços, valores, datas
 
-**INSTRUÇÕES ESPECÍFICAS PARA PDF:**
-- Leia e transcreva TODAS as páginas do documento
-- Se houver páginas escaneadas, aplique OCR completo
-- Mantenha a ordem das páginas e estrutura do documento
-- Preserve numeração de páginas se visível
-- Identifique: títulos, subtítulos, parágrafos, listas, tabelas, rodapés
-- Destaque informações críticas: órgãos, CNPJs, endereços, valores, datas
-- Transcreva artigos, incisos e parágrafos com numeração legal
-- Se houver tabelas, mantenha estrutura de linhas/colunas
-- Se houver assinaturas ou carimbos, mencione sua presença
-- Para cada página, indique claramente "=== PÁGINA X ===" antes do conteúdo
+**Se for planta/diagrama:**
+- Descreva elementos técnicos
+- Identifique medidas e legendas
 
-**QUALIDADE DO OCR:**
-- Leia texto mesmo em baixa resolução
-- Interprete texto manuscrito quando possível
-- Transcreva números, códigos e valores com precisão
-- Não omita nenhum texto, mesmo pequeno ou em rodapé
-
-Retorne APENAS o texto extraído, sem comentários ou análises.`
-        : `Analise esta imagem detalhadamente e extraia TODO o texto visível.
-
-**Se for documento escaneado/foto de documento:**
-- Aplique OCR para extrair texto (mesmo que manuscrito ou de baixa qualidade)
-- Mantenha estrutura, formatação, numeração, tabelas
-- Identifique: títulos, subtítulos, parágrafos, listas, rodapés, assinaturas
-- Destaque: órgãos, CNPJs, endereços, telefones, e-mails, valores, datas
-
-**Se for planta/diagrama/croqui técnico:**
-- Descreva o que está representado
-- Identifique medidas, cotas, legendas
-- Liste elementos técnicos (portas, janelas, equipamentos, etc.)
-
-**Se for foto de local/situação:**
+**Se for foto de local:**
 - Descreva o que está visível
-- Identifique problemas aparentes (deterioração, danos, etc.)
-- Mencione condições do local
+- Identifique problemas aparentes
 
-**Se for tabela/planilha:**
-- Transcreva todos os dados mantendo estrutura
-- Identifique cabeçalhos e totais
+Retorne APENAS o texto extraído.`;
 
-Retorne APENAS o texto extraído, sem comentários.`;
-
-      const extractResponse = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+      console.log("[ExtractDocument] 🚀 Enviando para Gemini Vision...");
+      const imageResponse = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
         method: "POST",
         headers: {
           Authorization: `Bearer ${LOVABLE_API_KEY}`,
@@ -148,40 +148,33 @@ Retorne APENAS o texto extraído, sem comentários.`;
         },
         body: JSON.stringify({
           model: "google/gemini-2.5-flash",
-          messages: [
-            {
-              role: "user",
-              content: [
-                { type: "text", text: extractPrompt },
-                {
-                  type: "image_url",
-                  image_url: {
-                    url: `data:${fileType};base64,${base64Content}`,
-                  },
-                },
-              ],
-            },
-          ],
+          messages: [{
+            role: "user",
+            content: [
+              { type: "text", text: imagePrompt },
+              { type: "image_url", image_url: { url: `data:${fileType};base64,${base64Content}` } }
+            ]
+          }],
           temperature: 0.3,
           max_tokens: 8192,
         }),
       });
 
-      if (!extractResponse.ok) {
-        if (extractResponse.status === 429) {
-          throw new Error("Rate limit atingido. Aguarde alguns segundos e tente novamente.");
+      if (!imageResponse.ok) {
+        if (imageResponse.status === 429) {
+          throw new Error("Rate limit atingido. Aguarde alguns segundos.");
         }
-        if (extractResponse.status === 402) {
-          throw new Error("Créditos Lovable AI insuficientes. Adicione em Settings > Workspace > Usage.");
+        if (imageResponse.status === 402) {
+          throw new Error("Créditos Lovable AI insuficientes.");
         }
-        const errorText = await extractResponse.text();
-        console.error("[ExtractDocument] ❌ Erro na API Gemini:", errorText);
-        throw new Error(`Erro na API: ${extractResponse.status} - ${errorText}`);
+        const errorText = await imageResponse.text();
+        console.error("[ExtractDocument] ❌ Erro ao processar imagem:", errorText);
+        throw new Error(`Erro ao processar imagem: ${imageResponse.status}`);
       }
 
-      const extractData = await extractResponse.json();
-      extractedText = extractData.choices?.[0]?.message?.content || "";
-      console.log(`[ExtractDocument] ✅ ${isPDF ? 'PDF' : 'Imagem'} processado: ${extractedText.length} caracteres extraídos`);
+      const imageData = await imageResponse.json();
+      extractedText = imageData.choices?.[0]?.message?.content || "";
+      console.log(`[ExtractDocument] ✅ Imagem processada: ${extractedText.length} caracteres`);
     } else {
       throw new Error(`Tipo de arquivo não suportado: ${fileType}`);
     }
