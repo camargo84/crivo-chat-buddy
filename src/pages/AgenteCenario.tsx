@@ -28,7 +28,6 @@ const AgenteCenario = () => {
   const [sending, setSending] = useState(false);
   const [projectName, setProjectName] = useState("");
   const [questionNumber, setQuestionNumber] = useState(1);
-  const [phase, setPhase] = useState<"universal" | "specific">("universal");
   const [attachments, setAttachments] = useState<any[]>([]);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [generatedReport, setGeneratedReport] = useState<string | null>(null);
@@ -75,23 +74,16 @@ const AgenteCenario = () => {
 
     if (messagesData && messagesData.length > 0) {
       setMessages(messagesData as Message[]);
-      // Determinar fase e número de pergunta baseado nas mensagens
+      // Contar perguntas já feitas
       const assistantMessages = messagesData.filter((m) => m.role === "assistant");
-      const questionCount = assistantMessages.length;
-      if (questionCount <= 10) {
-        setPhase("universal");
-        setQuestionNumber(questionCount);
-      } else {
-        setPhase("specific");
-        setQuestionNumber(questionCount);
-      }
+      setQuestionNumber(assistantMessages.length);
     } else {
       // Send initial message
       const initialMessage = {
         demanda_id: id!,
         role: "assistant" as const,
-        content: `Olá! Sou o Agente Cenário do Framework CRIVO. 🎯\n\nVou te ajudar a construir um contexto completo para a demanda **"${project.name}"**.\n\nVamos começar com **10 perguntas universais** sobre sua contratação. Depois, vou gerar **10 perguntas específicas** baseadas nas suas respostas e nos documentos que você anexar.\n\n**Você pode anexar documentos a qualquer momento usando o botão de clipe.** 📎\n\n---\n\n**Pergunta 1/10 - NECESSIDADE**\n\nQual é a necessidade ou problema que motivou esta demanda de contratação?`,
-        metadata: { phase: "universal", question_number: 1 },
+        content: `Olá! Sou o Agente Cenário do Framework CRIVO. 🎯\n\nVou te ajudar a construir um contexto completo para a demanda **"${project.name}"**.\n\nVou fazer perguntas adaptativas para coletar todas as informações necessárias para o relatório de cenário. Você pode anexar documentos a qualquer momento usando o botão de clipe - vou consultá-los sempre que você digitar "buscar". 📎\n\n---\n\n**Pergunta 1 - ÓRGÃO RESPONSÁVEL**\n\nQual é o órgão ou entidade responsável por esta demanda? (Inclua nome completo, sigla e CNPJ se possível)\n\n(Digite 'buscar' se quiser que eu consulte os arquivos anexados)`,
+        metadata: { question_number: 1 },
       };
 
       const { data: newMsg } = await supabase
@@ -155,7 +147,7 @@ const AgenteCenario = () => {
           demanda_id: id!,
           role: "user" as const,
           content: "buscar",
-          metadata: { phase, question_number: questionNumber },
+          metadata: { question_number: questionNumber },
         };
 
         const { data: savedUserMsg } = await supabase
@@ -179,7 +171,7 @@ const AgenteCenario = () => {
           demanda_id: id!,
           role: "assistant" as const,
           content: assistantResponse,
-          metadata: { phase, question_number: questionNumber, rag_search: true },
+          metadata: { question_number: questionNumber, rag_search: true },
         };
 
         const { data: savedAssistantMsg } = await supabase
@@ -211,7 +203,7 @@ const AgenteCenario = () => {
         demanda_id: id!,
         role: "user" as const,
         content: input.trim(),
-        metadata: { phase, question_number: questionNumber },
+        metadata: { question_number: questionNumber },
       };
 
       const { data: userMsg, error: userError } = await supabase
@@ -236,7 +228,6 @@ const AgenteCenario = () => {
         body: {
           messages: conversationHistory,
           projectId: id!,
-          phase,
           questionNumber: questionNumber + 1,
         },
       });
@@ -245,17 +236,7 @@ const AgenteCenario = () => {
 
       if (aiData?.savedMessage) {
         setMessages((prev) => [...prev, aiData.savedMessage as Message]);
-        
-        // Update question number and phase
-        const newQuestionNumber = questionNumber + 1;
-        setQuestionNumber(newQuestionNumber);
-        
-        if (questionNumber === 10 && phase === "universal") {
-          setPhase("specific");
-          toast.success("✅ Perguntas universais concluídas! Iniciando perguntas específicas...");
-        } else if (newQuestionNumber >= 20) {
-          toast.success("🎉 Coleta de informações concluída!");
-        }
+        setQuestionNumber(questionNumber + 1);
       }
 
       setSending(false);
@@ -305,8 +286,6 @@ const AgenteCenario = () => {
       </div>
     );
   }
-
-  const totalProgress = Math.min((questionNumber / 20) * 100, 100);
 
   return (
     <div className="min-h-screen bg-background flex">
