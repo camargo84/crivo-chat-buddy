@@ -32,7 +32,11 @@ serve(async (req) => {
       return new Response(
         JSON.stringify({
           found: false,
-          answer: "Você ainda não anexou nenhum arquivo. Por favor, anexe documentos para que eu possa consultá-los.",
+          answer: `Você ainda não anexou nenhum arquivo. 
+          
+Por favor, use o botão de clipe 📎 para anexar documentos relacionados à demanda (editais, termos de referência, estudos, plantas, fotos, etc.).
+
+Após anexar os arquivos, digite 'buscar' novamente e eu consultarei o conteúdo para responder à pergunta.`,
           source_file: null,
         }),
         { headers: { ...corsHeaders, "Content-Type": "application/json" }, status: 200 }
@@ -115,7 +119,19 @@ serve(async (req) => {
       return new Response(
         JSON.stringify({
           found: false,
-          answer: "Não consegui processar os arquivos anexados no momento. Você poderia fornecer a resposta diretamente?",
+          answer: `Não consegui processar os arquivos anexados no momento. 
+
+**Alguns motivos possíveis:**
+- Os arquivos podem estar corrompidos
+- Formato não totalmente suportado
+- Erro temporário no processamento
+
+**O que você pode fazer:**
+1. Fornecer a informação diretamente na resposta
+2. Verificar se os arquivos foram anexados corretamente
+3. Tentar anexar novamente ou usar outro formato (PDF, PNG, JPG, DOCX)
+
+Você poderia fornecer a resposta diretamente?`,
           source_file: null,
         }),
         { headers: { ...corsHeaders, "Content-Type": "application/json" }, status: 200 }

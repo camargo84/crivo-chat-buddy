@@ -37,6 +37,11 @@ export const FileUploadArea = ({ projectId, onUploadComplete }: FileUploadAreaPr
       "image/png",
       "image/jpeg",
       "image/jpg",
+      "image/webp",
+      "image/gif",
+      "image/svg+xml",
+      "image/bmp",
+      "image/tiff",
       "text/plain",
       "text/csv",
       "text/markdown",
@@ -117,8 +122,8 @@ export const FileUploadArea = ({ projectId, onUploadComplete }: FileUploadAreaPr
 
       if (attachmentError) throw attachmentError;
 
-      // Arquivo anexado com sucesso, sem processamento fake
-      toast.success(`Arquivo ${file.name} anexado!`);
+      // Arquivo anexado com sucesso
+      toast.success(`✅ ${file.name} anexado e pronto para consulta!`);
 
       updateFileStatus(file, { progress: 100, status: "complete" });
       onUploadComplete(attachment);
@@ -172,7 +177,7 @@ export const FileUploadArea = ({ projectId, onUploadComplete }: FileUploadAreaPr
         ref={fileInputRef}
         type="file"
         multiple
-        accept=".pdf,.docx,.png,.jpg,.jpeg,.txt,.csv,.md"
+        accept=".pdf,.docx,.png,.jpg,.jpeg,.webp,.gif,.svg,.bmp,.tiff,.txt,.csv,.md"
         onChange={(e) => e.target.files && handleFiles(e.target.files)}
         className="hidden"
       />
@@ -226,7 +231,7 @@ export const FileUploadArea = ({ projectId, onUploadComplete }: FileUploadAreaPr
             <Paperclip className="h-12 w-12 mx-auto mb-4 text-primary" />
             <p className="text-lg font-medium">Solte os arquivos aqui</p>
             <p className="text-sm text-muted-foreground mt-2">
-              PDF, DOCX, PNG, JPG, TXT, CSV, MD (máx 20MB)
+              PDF, DOCX, PNG, JPG, WEBP, GIF, SVG, BMP, TIFF, TXT, CSV, MD (máx 20MB)
             </p>
           </Card>
         </div>

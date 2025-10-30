@@ -82,7 +82,40 @@ const AgenteCenario = () => {
       const initialMessage = {
         demanda_id: id!,
         role: "assistant" as const,
-        content: `Olá! Sou o Agente Cenário do Framework CRIVO. 🎯\n\nVou te ajudar a construir um contexto completo para a demanda **"${project.name}"**.\n\nVou fazer perguntas adaptativas para coletar todas as informações necessárias para o relatório de cenário. Você pode anexar documentos a qualquer momento usando o botão de clipe - vou consultá-los sempre que você digitar "buscar". 📎\n\n---\n\n**Pergunta 1 - ÓRGÃO RESPONSÁVEL**\n\nQual é o órgão ou entidade responsável por esta demanda? (Inclua nome completo, sigla e CNPJ se possível)\n\n(Digite 'buscar' se quiser que eu consulte os arquivos anexados)`,
+        content: `Olá! Sou o **Agente Cenário** do Framework CRIVO. 🎯
+
+Vou te ajudar a construir um contexto completo para a demanda **"${project.name}"**.
+
+### 📎 PRIMEIRO PASSO: Anexe seus documentos
+
+Por favor, anexe **todos os documentos** relacionados à demanda usando o botão de clipe 📎 abaixo:
+- Editais, termos de referência
+- Estudos técnicos, projetos
+- Plantas, croquis, fotos
+- Planilhas orçamentárias
+- Legislação aplicável
+- Qualquer outro documento relevante
+
+**Formatos aceitos:** PDF, DOCX, PNG, JPG, WEBP, GIF, TXT, CSV, MD (até 20MB cada)
+
+---
+
+### 💬 Como funciona a conversa?
+
+Após anexar os documentos, vou fazer perguntas estratégicas para montar o relatório técnico.
+
+**Dica importante:** A qualquer momento, você pode digitar **"buscar"** e eu vou consultar os arquivos anexados para encontrar a informação que estou perguntando.
+
+---
+
+Quando estiver pronto, responda: **"Pronto para começar"** ou anexe os documentos e responda à primeira pergunta abaixo.
+
+---
+
+### Primeira pergunta:
+
+**Qual é o órgão/entidade responsável por esta demanda?**  
+_(Digite "buscar" se quiser que eu consulte os arquivos anexados)_`,
         metadata: { question_number: 1 },
       };
 
@@ -123,6 +156,16 @@ const AgenteCenario = () => {
     // Verificar se usuário digitou "buscar"
     if (input.trim().toLowerCase() === "buscar") {
       setSending(true);
+      
+      // Adicionar mensagem temporária de "consultando"
+      const tempMessage: Message = {
+        id: `temp-${Date.now()}`,
+        role: "assistant",
+        content: "🔍 Consultando arquivos anexados...",
+        created_at: new Date().toISOString()
+      };
+      setMessages(prev => [...prev, tempMessage]);
+      
       try {
         const lastAssistantMsg = [...messages].reverse().find(m => m.role === "assistant");
         if (!lastAssistantMsg) {
@@ -157,14 +200,14 @@ const AgenteCenario = () => {
           .single();
 
         if (savedUserMsg) {
-          setMessages((prev) => [...prev, savedUserMsg as Message]);
+          setMessages((prev) => [...prev.filter(m => !m.id.startsWith('temp-')), savedUserMsg as Message]);
         }
 
         let assistantResponse = "";
         if (ragData?.found) {
           assistantResponse = `📄 **Encontrei nos arquivos:**\n\n${ragData.answer}\n\n(Fonte: ${ragData.source_file})\n\nVocê confirma essa informação ou deseja fazer alguma alteração?`;
         } else {
-          assistantResponse = "❌ Não encontrei essa informação nos arquivos anexados. Você poderia fornecer diretamente?";
+          assistantResponse = ragData?.answer || "❌ Não encontrei essa informação nos arquivos anexados. Você poderia fornecer diretamente?";
         }
 
         const assistantMsg = {
@@ -181,7 +224,7 @@ const AgenteCenario = () => {
           .single();
 
         if (savedAssistantMsg) {
-          setMessages((prev) => [...prev, savedAssistantMsg as Message]);
+          setMessages((prev) => [...prev.filter(m => !m.id.startsWith('temp-')), savedAssistantMsg as Message]);
         }
 
         setInput("");
@@ -189,6 +232,7 @@ const AgenteCenario = () => {
         return;
       } catch (error: any) {
         console.error("RAG search error:", error);
+        setMessages(prev => prev.filter(m => !m.id.startsWith('temp-')));
         toast.error(error.message || "Erro ao buscar nos arquivos");
         setSending(false);
         return;
@@ -318,8 +362,16 @@ const AgenteCenario = () => {
         {!sidebarCollapsed && (
           <ScrollArea className="flex-1">
             <div className="p-4 space-y-4">
-              {/* Status Integrado */}
-              <CollectionStatus projectId={id!} />
+              {/* Info simplificada */}
+              <div className="space-y-2 p-3 bg-muted/30 rounded-lg">
+                <h3 className="font-semibold text-sm">Status da Coleta</h3>
+                <p className="text-xs text-muted-foreground">
+                  Modo: Perguntas Adaptativas
+                </p>
+                <p className="text-xs text-muted-foreground">
+                  {attachments.length} arquivo(s) anexado(s)
+                </p>
+              </div>
 
               {/* Actions */}
               <div className="space-y-2">
@@ -357,12 +409,17 @@ const AgenteCenario = () => {
       <div className="flex-1 flex flex-col">
         {/* Header */}
         <header className="border-b bg-card px-6 py-4">
-          <h1 className="text-xl font-bold mb-3">
+          <h1 className="text-xl font-bold">
             {reportMode ? "Relatório de Cenário" : "Conversa com Agente Cenário"}
           </h1>
-          {/* Área de Arquivos Anexados - Estilo ChatGPT */}
-          {!reportMode && <AttachmentsList projectId={id!} />}
         </header>
+        
+        {/* Área dedicada de arquivos - FORA do header */}
+        {!reportMode && (
+          <div className="border-b bg-muted/30 px-6 py-3">
+            <AttachmentsList projectId={id!} />
+          </div>
+        )}
 
         {/* Content */}
         {reportMode && generatedReport ? (
@@ -459,7 +516,7 @@ const AgenteCenario = () => {
                   }}
                 />
                 <Textarea
-                  placeholder="Digite sua resposta ou 'buscar' para consultar arquivos... (Enter para enviar)"
+                  placeholder="Digite sua resposta, 'buscar' para consultar arquivos, ou 'pronto para começar'..."
                   value={input}
                   onChange={(e) => setInput(e.target.value)}
                   onKeyDown={(e) => {

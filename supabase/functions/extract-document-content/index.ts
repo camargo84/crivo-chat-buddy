@@ -34,9 +34,33 @@ serve(async (req) => {
     const isPDF = fileType === "application/pdf";
     const isDOCX = fileType === "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
 
-    const extractPrompt = `Extraia TODO o texto deste documento em português, mantendo estrutura, formatação, numeração.
-Inclua: títulos, subtítulos, parágrafos, listas, tabelas, rodapés, artigos, incisos.
-Destaque: órgãos, CNPJs, endereços, telefones, valores, datas.`;
+    const extractPrompt = `Analise esta imagem/documento detalhadamente e extraia TODO o texto visível.
+
+**Se for documento escaneado/foto de documento:**
+- Aplique OCR para extrair texto (mesmo que manuscrito ou de baixa qualidade)
+- Mantenha estrutura, formatação, numeração, tabelas
+- Identifique: títulos, subtítulos, parágrafos, listas, rodapés, assinaturas
+- Destaque: órgãos, CNPJs, endereços, telefones, e-mails, valores, datas
+- Transcreva artigos, incisos, parágrafos com numeração
+
+**Se for planta/diagrama/croqui técnico:**
+- Descreva o que está representado
+- Identifique medidas, cotas, legendas
+- Liste elementos técnicos (portas, janelas, equipamentos, etc.)
+- Mencione escalas se houver
+
+**Se for foto de local/situação:**
+- Descreva o que está visível
+- Identifique problemas aparentes (deterioração, danos, etc.)
+- Mencione condições do local
+- Liste elementos relevantes para uma obra ou serviço
+
+**Se for tabela/planilha:**
+- Transcreva todos os dados mantendo estrutura de linhas e colunas
+- Identifique cabeçalhos e totais
+- Preserve formatação de valores (R$, %, etc.)
+
+Seja extremamente detalhado e preciso. Extraia TODO o texto, incluindo texto pequeno ou de difícil leitura.`;
 
     if (isImage) {
       // Para IMAGENS: usar Gemini Flash Image Preview
@@ -78,22 +102,46 @@ Destaque: órgãos, CNPJs, endereços, telefones, valores, datas.`;
       const extractData = await extractResponse.json();
       extractedText = extractData.choices?.[0]?.message?.content || "";
     } else if (isPDF || isDOCX) {
-      // Para PDFs e DOCX: criar placeholder até implementar processamento completo
-      console.log(`[ExtractDocument] Arquivo ${isPDF ? "PDF" : "DOCX"} recebido - aguardando entrada manual`);
+      // Para PDFs e DOCX: processar com Gemini 2.5 Pro (suporta PDF/DOCX nativamente)
+      console.log(`[ExtractDocument] Processando ${isPDF ? "PDF" : "DOCX"} com Gemini 2.5 Pro`);
 
-      extractedText = `[Documento ${isPDF ? "PDF" : "DOCX"}: ${fileName}]
+      const extractResponse = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${LOVABLE_API_KEY}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          model: "google/gemini-2.5-pro",
+          messages: [
+            {
+              role: "user",
+              content: [
+                { type: "text", text: extractPrompt },
+                {
+                  type: "image_url",
+                  image_url: {
+                    url: `data:${fileType};base64,${base64Content}`,
+                  },
+                },
+              ],
+            },
+          ],
+          temperature: 0.2,
+          max_tokens: 16384, // Maior para documentos longos
+        }),
+      });
 
-📄 Arquivo anexado com sucesso!
+      if (!extractResponse.ok) {
+        const errorText = await extractResponse.text();
+        console.error("[ExtractDocument] Erro na extração:", errorText);
+        throw new Error(`Erro na API: ${extractResponse.status}`);
+      }
 
-O agente irá coletar as informações necessárias através das perguntas.
-Por favor, responda às perguntas do agente com base no conteúdo deste documento.
-
-Informações do arquivo:
-- Nome: ${fileName}
-- Tipo: ${isPDF ? "PDF" : "Word (.docx)"}
-- Tamanho: ${(fileBuffer.byteLength / 1024).toFixed(2)} KB
-
-Você pode baixar o arquivo a qualquer momento através da barra lateral.`;
+      const extractData = await extractResponse.json();
+      extractedText = extractData.choices?.[0]?.message?.content || "";
+      
+      console.log(`[ExtractDocument] ✅ Extraído ${extractedText.length} caracteres de ${fileName}`);
     } else {
       // Tipo de arquivo não suportado
       throw new Error(`Tipo de arquivo não suportado: ${fileType}`);
@@ -103,22 +151,22 @@ Você pode baixar o arquivo a qualquer momento através da barra lateral.`;
       throw new Error("Não foi possível processar o arquivo");
     }
 
-    // PASSO 2: Análise estruturada usando GPT-5 Mini (apenas se há conteúdo real extraído)
+    // PASSO 2: Análise estruturada usando Gemini 2.5 Pro (apenas se há conteúdo real extraído)
     let analysisJson;
 
-    if (isPDF || isDOCX || extractedText.startsWith("[Documento")) {
-      // Para arquivos que não foram totalmente processados, criar estrutura básica
+    if (extractedText.length < 50) {
+      // Conteúdo muito curto, criar estrutura básica
       analysisJson = {
         identificacao: {
           orgao_nome: "Não extraído - informar manualmente",
-          observacao: `Arquivo ${fileName} anexado. Informações serão coletadas via perguntas.`,
+          observacao: `Arquivo ${fileName} anexado. Conteúdo insuficiente para análise automática.`,
         },
         resumo_executivo: `Documento ${fileName} foi anexado. O agente solicitará as informações através das perguntas.`,
       };
 
-      console.log("[ExtractDocument] Análise simplificada para arquivo não processado");
+      console.log("[ExtractDocument] Conteúdo muito curto, análise simplificada");
     } else {
-      // Para imagens com conteúdo extraído, fazer análise completa
+      // Fazer análise completa do conteúdo extraído
       const analysisPrompt = `Analise este documento de contratação pública e estruture em JSON:
 
 {
