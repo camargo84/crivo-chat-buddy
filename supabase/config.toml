@@ -8,3 +8,6 @@ verify_jwt = false
 
 [functions.generate-report-docx]
 verify_jwt = false
+
+[functions.search-attachments-rag]
+verify_jwt = false

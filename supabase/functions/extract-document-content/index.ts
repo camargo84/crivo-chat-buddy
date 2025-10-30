@@ -49,7 +49,7 @@ Destaque: órgãos, CNPJs, endereços, telefones, valores, datas.`;
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          model: "google/gemini-2.5-flash",
+          model: "google/gemini-2.5-pro",
           messages: [
             {
               role: "user",
@@ -64,6 +64,7 @@ Destaque: órgãos, CNPJs, endereços, telefones, valores, datas.`;
               ],
             },
           ],
+          temperature: 0.3,
           max_tokens: 8192,
         }),
       });
@@ -198,9 +199,10 @@ ${extractedText.substring(0, 30000)}`;
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          model: "openai/gpt-5-mini",
+          model: "google/gemini-2.5-pro",
           messages: [{ role: "user", content: analysisPrompt }],
-          max_completion_tokens: 4096,
+          temperature: 0.3,
+          max_tokens: 4096,
         }),
       });
 

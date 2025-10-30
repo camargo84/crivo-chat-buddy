@@ -80,7 +80,7 @@ serve(async (req) => {
     
     const synthesisPrompt = `Você é um especialista em elaboração de documentos técnicos para administração pública brasileira.
 
-Gere um **RELATÓRIO DE CENÁRIO DE CONTRATAÇÃO** completo e profissional com base nas informações coletadas.
+Gere um **RELATÓRIO DE LEVANTAMENTO DE CENÁRIO** completo e profissional com MÍNIMO 8.000 CARACTERES.
 
 **DEMANDA:** ${project.name}
 
@@ -94,95 +94,95 @@ ${attachmentsText}
 
 ---
 
-**ESTRUTURA DO RELATÓRIO (use Markdown):**
+**ESTRUTURA OBRIGATÓRIA DO RELATÓRIO (use Markdown):**
 
-# RELATÓRIO DE CENÁRIO DE CONTRATAÇÃO
+# RELATÓRIO DE LEVANTAMENTO DE CENÁRIO
 
 ## 1. IDENTIFICAÇÃO
+- Órgão responsável
+- CNPJ
+- Endereço/localização completo
+- Contatos (telefone, email)
 
-- **Órgão/Entidade:**
-- **CNPJ:**
-- **Endereço:**
-- **Responsável pela demanda:**
-- **Data:**
+## 2. CONTEXTO DO PROBLEMA
+- Situação atual problemática (descrição detalhada)
+- Local exato de ocorrência
+- População afetada (quantificada com números)
+- Impactos negativos atuais
+- Magnitude do problema
 
-## 2. CONTEXTO E SITUAÇÃO-PROBLEMA
+## 3. SOLUÇÃO PROPOSTA (HIPÓTESE DE PARTIDA)
+- Descrição detalhada da solução escolhida pelo usuário
+- Especificações técnicas completas
+- Quantitativos estimados
+- Prazo de execução
+- Local de execução
+- Justificativa da escolha desta solução
 
-Descreva detalhadamente a situação problemática que motivou esta demanda.
+## 4. OUTRAS HIPÓTESES IDENTIFICADAS
+- Listar soluções alternativas mencionadas pelo usuário
+- Registrar que devem ser investigadas posteriormente em estudos comparativos
+- Comparação preliminar se houver informação disponível
 
-### 2.1 Local de Ocorrência
+## 5. ASPECTOS TÉCNICOS E LEGAIS
+- Normas aplicáveis (Leis, Decretos, Portarias, NBRs)
+- Requisitos técnicos obrigatórios
+- Competência legal do órgão para esta contratação
+- Exigências específicas
 
-### 2.2 População Afetada
+## 6. VIABILIDADE
+### 6.1 Orçamentária
+- Orçamento estimado (valor em R$)
+- Fonte de recursos
+- Rubrica orçamentária
+- Disponibilidade atual
 
-### 2.3 Impactos Negativos
+### 6.2 Técnica e Operacional
+- Capacidade de gestão do órgão
+- Recursos humanos disponíveis
+- Infraestrutura necessária
 
-## 3. SOLUÇÃO PROPOSTA
+### 6.3 Riscos Identificados
+- Principais riscos técnicos
+- Riscos financeiros
+- Riscos de prazo
+- Mitigações propostas
 
-### 3.1 Descrição do Objeto
+## 7. INFORMAÇÕES COMPLEMENTARES
+- Dados para Documento de Formalização da Demanda
+- Referências e precedentes
+- Soluções similares já implementadas
+- Estudos técnicos consultados
 
-### 3.2 Especificações Técnicas Preliminares
+## 8. SÍNTESE CONCLUSIVA
 
-### 3.3 Quantitativos Estimados
+**OBRIGATÓRIO: EXATAMENTE 4 PARÁGRAFOS ESTRUTURADOS:**
 
-### 3.4 Local de Execução
+**O Problema Identificado:**
+[Descrever objetivamente qual é o problema, como se manifesta, onde ocorre e por que é um problema que requer solução. Mínimo 200 palavras]
 
-## 4. JUSTIFICATIVA TÉCNICA
+**Os Beneficiários:**
+[Identificar claramente quem serão os beneficiados diretos e indiretos, com quantificação precisa. Descrever o perfil da população afetada. Mínimo 150 palavras]
 
-### 4.1 Fundamentação da Necessidade
+**O Interesse Público:**
+[Explicar detalhadamente por que atender essa demanda é de interesse público. Relacionar com princípios constitucionais, políticas públicas vigentes e impactos sociais esperados. Mínimo 200 palavras]
 
-### 4.2 Alternativas Consideradas
-
-### 4.3 Critérios de Escolha
-
-## 5. ASPECTOS LEGAIS E NORMATIVOS
-
-### 5.1 Legislação Aplicável
-
-### 5.2 Competência Legal
-
-### 5.3 Exigências Específicas
-
-## 6. VIABILIDADE ORÇAMENTÁRIA E FINANCEIRA
-
-### 6.1 Orçamento Estimado
-
-### 6.2 Fonte de Recursos
-
-### 6.3 Disponibilidade Orçamentária
-
-## 7. ANÁLISE DE VIABILIDADE
-
-### 7.1 Viabilidade Técnica
-
-### 7.2 Viabilidade Econômica
-
-### 7.3 Capacidade de Gestão
-
-### 7.4 Riscos Identificados
-
-## 8. PLANEJAMENTO E PRAZOS
-
-### 8.1 Prazo Estimado de Execução
-
-### 8.2 Cronograma Preliminar
-
-### 8.3 Nível de Urgência
-
-## 9. CONCLUSÃO
-
-### 9.1 Síntese
-
-### 9.2 Recomendações para Próximas Etapas
+**Consequências da Inação:**
+[Descrever objetivamente o que acontecerá se nada for feito. Quais impactos negativos continuarão ou se agravarão. Quantificar perdas e prejuízos quando possível. Mínimo 150 palavras]
 
 ---
 
-**IMPORTANTE:**
-- Use linguagem FORMAL e TÉCNICA de administração pública
-- Seja OBJETIVO e COMPLETO
-- Cite DADOS CONCRETOS das respostas
-- Inclua TRECHOS LITERAIS quando relevante
-- Se alguma informação não foi fornecida, indique claramente
-- Mencione a Lei 14.133/2021 quando pertinente`;
+**REQUISITOS CRÍTICOS:**
+1. O relatório DEVE TER NO MÍNIMO 8.000 CARACTERES
+2. Use linguagem FORMAL e TÉCNICA de administração pública
+3. Seja COMPLETO e DETALHADO - não resuma excessivamente
+4. Cite DADOS CONCRETOS e NÚMEROS das respostas do usuário
+5. Inclua TRECHOS LITERAIS dos documentos quando relevante
+6. Se alguma informação não foi fornecida, indique claramente "Informação não disponível"
+7. Mencione a Lei 14.133/2021 quando pertinente
+8. Os 4 parágrafos da síntese conclusiva são OBRIGATÓRIOS e devem seguir exatamente a estrutura indicada
+9. Cada seção deve ser desenvolvida completamente, não use placeholders
+10. Se houver múltiplas hipóteses de solução, destaque a escolhida mas registre as demais`;
 
     const response = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
       method: 'POST',
@@ -191,9 +191,10 @@ Descreva detalhadamente a situação problemática que motivou esta demanda.
         'Content-Type': 'application/json'
       },
       body: JSON.stringify({
-        model: 'openai/gpt-5-mini',
+        model: 'google/gemini-2.5-pro',
         messages: [{ role: 'user', content: synthesisPrompt }],
-        max_completion_tokens: 8000
+        temperature: 0.2,
+        max_tokens: 16000
       })
     });
 
@@ -203,6 +204,11 @@ Descreva detalhadamente a situação problemática que motivou esta demanda.
 
     const data = await response.json();
     const reportMarkdown = data.choices[0].message.content;
+
+    // Validar extensão mínima
+    if (reportMarkdown.length < 8000) {
+      console.warn(`[GenerateReport] ⚠️ Relatório com ${reportMarkdown.length} caracteres (mínimo: 8000)`);
+    }
 
     // 6. Salvar relatório no projeto
     await supabase

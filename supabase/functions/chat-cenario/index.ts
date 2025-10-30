@@ -109,9 +109,36 @@ serve(async (req) => {
     }
 
     // System prompt INTELIGENTE
-    const systemPrompt = `Você é o Agente Cenário do Framework CRIVO. 🎯
+    const systemPrompt = `Você é um agente especializado em levantamento de cenário para contratações públicas.
 
-Sua missão: coletar informações COMPLETAS para gerar o Relatório de Cenário de Contratação.
+COMPORTAMENTO:
+- Conduza conversa profissional, solícita e colaborativa
+- Faça perguntas adaptativas baseadas no que já foi coletado
+- **SEMPRE termine mensagens com deixa de interação ou pergunta clara**
+- Para cada pergunta, ofereça ao usuário: "(Digite 'buscar' se quiser que eu consulte os arquivos)"
+- Identifique lacunas e reformule perguntas quando necessário
+- Registre "Informação não disponível" quando usuário não souber
+
+SOBRE SOLUÇÕES:
+- Identificar todas as hipóteses de solução mencionadas pelo usuário
+- Pedir que usuário escolha UMA como "hipótese de partida"
+- Deixar claro que relatório dará destaque à escolhida, mas registrará as demais
+- Perguntar: "Você mencionou algumas soluções em discussão. Qual considera a melhor candidata para ser a HIPÓTESE DE PARTIDA? O relatório dará destaque a ela, mas registrará que outras hipóteses emergiram."
+
+BUSCA WEB PROATIVA:
+- Quando detectar menção a legislação, normas técnicas ou regulamentos, você pode buscar informações complementares na web
+- Integre resultados naturalmente na conversa, citando as fontes
+
+OBJETIVO FINAL:
+- Produzir relatório técnico com MÍNIMO 8.000 caracteres
+- Estruturar conforme template fornecido
+- Incluir seção conclusiva com exatamente 4 parágrafos obrigatórios
+
+QUALIDADE:
+- Use linguagem técnica e profissional
+- Seja preciso e objetivo
+- Valide dados estruturados (CNPJs, CEPs, valores)
+- Cite fontes quando usar busca web ou arquivos
 
 ═════════════════════════════════════════════════════════════════════════
 🔴 REGRA FUNDAMENTAL - NUNCA PERGUNTAR O QUE JÁ SABE
@@ -160,13 +187,8 @@ Foque em: quantitativos, especificações técnicas, prazos detalhados, riscos, 
 `}
 ${documentsContext}
 
-DIRETRIZES:
-- Tom profissional mas acessível
-- SEMPRE cite trechos literais ao apresentar informações de arquivos
-- Valide informações importantes
-- Use Markdown (negrito, listas)
-- **CRÍTICO:** SEMPRE termine com uma pergunta clara que exija resposta do usuário
-- NUNCA envie mensagens apenas informativas sem solicitar ação/confirmação`;
+**CRÍTICO:** SEMPRE termine com uma pergunta clara que exija resposta do usuário ou ação específica.
+NUNCA envie mensagens apenas informativas sem solicitar confirmação ou próxima ação.`;
 
     const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
       method: "POST",
@@ -175,12 +197,13 @@ DIRETRIZES:
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        model: "openai/gpt-5-mini",
+        model: "google/gemini-2.5-pro",
         messages: [
           { role: "system", content: systemPrompt },
           ...messages,
         ],
-        max_completion_tokens: 2048,
+        temperature: 0.3,
+        max_tokens: 4096,
       }),
     });
 
@@ -215,7 +238,7 @@ DIRETRIZES:
         metadata: {
           phase,
           question_number: questionNumber,
-          model: "openai/gpt-5-mini",
+          model: "google/gemini-2.5-pro",
         },
       })
       .select()

@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Textarea } from "@/components/ui/textarea";
 import { toast } from "sonner";
-import { ArrowLeft, Send, Bot, User, Loader2, FileText, Download, ChevronLeft, ChevronRight } from "lucide-react";
+import { ArrowLeft, Send, Bot, User, Loader2, FileText, Download, ChevronLeft, ChevronRight, Copy } from "lucide-react";
 import { FileUploadArea } from "@/components/FileUploadArea";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import ReactMarkdown from "react-markdown";
@@ -120,8 +120,88 @@ const AgenteCenario = () => {
     setLoading(false);
   };
 
+  const handleCopyMessage = (content: string) => {
+    navigator.clipboard.writeText(content);
+    toast.success("Mensagem copiada!");
+  };
+
   const handleSend = async () => {
     if (!input.trim() || sending) return;
+
+    // Verificar se usuário digitou "buscar"
+    if (input.trim().toLowerCase() === "buscar") {
+      setSending(true);
+      try {
+        const lastAssistantMsg = [...messages].reverse().find(m => m.role === "assistant");
+        if (!lastAssistantMsg) {
+          toast.error("Nenhuma pergunta anterior encontrada");
+          setSending(false);
+          return;
+        }
+
+        const { data: ragData, error: ragError } = await supabase.functions.invoke(
+          "search-attachments-rag",
+          {
+            body: {
+              demanda_id: id!,
+              question: lastAssistantMsg.content,
+            },
+          }
+        );
+
+        if (ragError) throw ragError;
+
+        const userMsg = {
+          demanda_id: id!,
+          role: "user" as const,
+          content: "buscar",
+          metadata: { phase, question_number: questionNumber },
+        };
+
+        const { data: savedUserMsg } = await supabase
+          .from("demanda_messages")
+          .insert(userMsg)
+          .select()
+          .single();
+
+        if (savedUserMsg) {
+          setMessages((prev) => [...prev, savedUserMsg as Message]);
+        }
+
+        let assistantResponse = "";
+        if (ragData?.found) {
+          assistantResponse = `📄 **Encontrei nos arquivos:**\n\n${ragData.answer}\n\n(Fonte: ${ragData.source_file})\n\nVocê confirma essa informação ou deseja fazer alguma alteração?`;
+        } else {
+          assistantResponse = "❌ Não encontrei essa informação nos arquivos anexados. Você poderia fornecer diretamente?";
+        }
+
+        const assistantMsg = {
+          demanda_id: id!,
+          role: "assistant" as const,
+          content: assistantResponse,
+          metadata: { phase, question_number: questionNumber, rag_search: true },
+        };
+
+        const { data: savedAssistantMsg } = await supabase
+          .from("demanda_messages")
+          .insert(assistantMsg)
+          .select()
+          .single();
+
+        if (savedAssistantMsg) {
+          setMessages((prev) => [...prev, savedAssistantMsg as Message]);
+        }
+
+        setInput("");
+        setSending(false);
+        return;
+      } catch (error: any) {
+        console.error("RAG search error:", error);
+        toast.error(error.message || "Erro ao buscar nos arquivos");
+        setSending(false);
+        return;
+      }
+    }
 
     setSending(true);
 
@@ -342,12 +422,20 @@ const AgenteCenario = () => {
                       </div>
                     )}
                     <Card
-                      className={`max-w-[80%] p-4 ${
+                      className={`max-w-[80%] p-4 relative group ${
                         msg.role === "user"
                           ? "bg-secondary text-secondary-foreground"
                           : "bg-card"
                       }`}
                     >
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="absolute top-2 right-2 h-6 w-6 opacity-0 group-hover:opacity-100 transition-opacity"
+                        onClick={() => handleCopyMessage(msg.content)}
+                      >
+                        <Copy className="h-3 w-3" />
+                      </Button>
                       <div className="prose prose-sm dark:prose-invert max-w-none">
                         <ReactMarkdown>{msg.content}</ReactMarkdown>
                       </div>
@@ -393,7 +481,7 @@ const AgenteCenario = () => {
                   }}
                 />
                 <Textarea
-                  placeholder="Digite sua resposta... (Enter para enviar, Shift+Enter para quebrar linha)"
+                  placeholder="Digite sua resposta ou 'buscar' para consultar arquivos... (Enter para enviar)"
                   value={input}
                   onChange={(e) => setInput(e.target.value)}
                   onKeyDown={(e) => {
