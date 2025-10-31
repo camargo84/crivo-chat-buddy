@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Textarea } from "@/components/ui/textarea";
 import { toast } from "sonner";
-import { ArrowLeft, Send, Bot, User, Loader2, FileText, Download, ChevronLeft, ChevronRight, Copy } from "lucide-react";
+import { ArrowLeft, Send, Bot, User, Loader2, FileText, Download, Copy } from "lucide-react";
 import { FileUploadArea } from "@/components/FileUploadArea";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import ReactMarkdown from "react-markdown";
@@ -28,8 +28,6 @@ const AgenteCenario = () => {
   const [sending, setSending] = useState(false);
   const [projectName, setProjectName] = useState("");
   const [questionNumber, setQuestionNumber] = useState(1);
-  const [attachments, setAttachments] = useState<any[]>([]);
-  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [generatedReport, setGeneratedReport] = useState<string | null>(null);
   const [reportMode, setReportMode] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -50,7 +48,6 @@ const AgenteCenario = () => {
       return;
     }
 
-    // Get project
     const { data: project, error } = await supabase
       .from("projects")
       .select("*")
@@ -65,7 +62,6 @@ const AgenteCenario = () => {
 
     setProjectName(project.name);
 
-    // Get messages
     const { data: messagesData } = await supabase
       .from("demanda_messages")
       .select("*")
@@ -74,11 +70,9 @@ const AgenteCenario = () => {
 
     if (messagesData && messagesData.length > 0) {
       setMessages(messagesData as Message[]);
-      // Contar perguntas já feitas
       const assistantMessages = messagesData.filter((m) => m.role === "assistant");
       setQuestionNumber(assistantMessages.length);
     } else {
-      // Send initial message
       const initialMessage = {
         demanda_id: id!,
         role: "assistant" as const,
@@ -88,7 +82,7 @@ Vou te ajudar a construir um contexto completo para a demanda **"${project.name}
 
 ### 📎 PRIMEIRO PASSO: Anexe seus documentos
 
-Por favor, anexe **todos os documentos** relacionados à demanda usando o botão de clipe 📎 abaixo:
+Por favor, anexe **todos os documentos** relacionados à demanda usando a área de upload à direita:
 - Editais, termos de referência
 - Estudos técnicos, projetos
 - Plantas, croquis, fotos
@@ -130,18 +124,6 @@ _(Digite "buscar" se quiser que eu consulte os arquivos anexados)_`,
       }
     }
 
-    // Get attachments
-    const { data: attachmentsData } = await supabase
-      .from("attachments")
-      .select("*")
-      .eq("demanda_id", id!)
-      .is("deleted_at", null)
-      .order("created_at", { ascending: true });
-
-    if (attachmentsData) {
-      setAttachments(attachmentsData);
-    }
-
     setLoading(false);
   };
 
@@ -153,11 +135,9 @@ _(Digite "buscar" se quiser que eu consulte os arquivos anexados)_`,
   const handleSend = async () => {
     if (!input.trim() || sending) return;
 
-    // Verificar se usuário digitou "buscar"
     if (input.trim().toLowerCase() === "buscar") {
       setSending(true);
       
-      // Adicionar mensagem temporária de "consultando"
       const tempMessage: Message = {
         id: `temp-${Date.now()}`,
         role: "assistant",
@@ -242,7 +222,6 @@ _(Digite "buscar" se quiser que eu consulte os arquivos anexados)_`,
     setSending(true);
 
     try {
-      // Save user message
       const userMessage = {
         demanda_id: id!,
         role: "user" as const,
@@ -259,10 +238,8 @@ _(Digite "buscar" se quiser que eu consulte os arquivos anexados)_`,
       if (userError) throw userError;
 
       setMessages((prev) => [...prev, userMsg as Message]);
-      const userInput = input.trim();
       setInput("");
 
-      // Call AI to generate next question
       const conversationHistory = [...messages, userMsg].map((m) => ({
         role: m.role,
         content: m.content,
@@ -320,12 +297,11 @@ _(Digite "buscar" se quiser que eu consulte os arquivos anexados)_`,
 
   const handleApproveReport = () => {
     toast.success("Relatório aprovado! (Funcionalidade de download em desenvolvimento)");
-    // TODO: Implementar geração de DOCX e download
   };
 
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
+      <div className="min-h-screen flex items-center justify-center bg-background">
         <Loader2 className="h-8 w-8 animate-spin text-primary" />
       </div>
     );
@@ -333,93 +309,28 @@ _(Digite "buscar" se quiser que eu consulte os arquivos anexados)_`,
 
   return (
     <div className="min-h-screen bg-background flex">
-      {/* Sidebar */}
-      <div
-        className={`${
-          sidebarCollapsed ? "w-14" : "w-80"
-        } border-r bg-card transition-all duration-300 flex flex-col`}
-      >
-        <div className="p-4 border-b flex items-center justify-between">
-          {!sidebarCollapsed && (
-            <div className="flex-1">
-              <h2 className="font-semibold text-sm">Etapa CENÁRIO</h2>
-              <p className="text-xs text-muted-foreground truncate">{projectName}</p>
-            </div>
-          )}
-          <Button
-            variant="ghost"
-            size="icon"
-            onClick={() => setSidebarCollapsed(!sidebarCollapsed)}
-          >
-            {sidebarCollapsed ? (
-              <ChevronRight className="h-4 w-4" />
-            ) : (
-              <ChevronLeft className="h-4 w-4" />
-            )}
-          </Button>
-        </div>
-
-        {!sidebarCollapsed && (
-          <ScrollArea className="flex-1">
-            <div className="p-4 space-y-4">
-              {/* Info simplificada */}
-              <div className="space-y-2 p-3 bg-muted/30 rounded-lg">
-                <h3 className="font-semibold text-sm">Status da Coleta</h3>
-                <p className="text-xs text-muted-foreground">
-                  Modo: Perguntas Adaptativas
-                </p>
-                <p className="text-xs text-muted-foreground">
-                  {attachments.length} arquivo(s) anexado(s)
-                </p>
-              </div>
-
-              {/* Actions */}
-              <div className="space-y-2">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="w-full"
-                  onClick={() => navigate("/dashboard")}
-                >
-                  <ArrowLeft className="h-4 w-4 mr-2" />
-                  Voltar ao Dashboard
-                </Button>
-                {questionNumber >= 20 && !reportMode && (
-                  <Button
-                    size="sm"
-                    className="w-full"
-                    onClick={handleGenerateReport}
-                    disabled={loading}
-                  >
-                    {loading ? (
-                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                    ) : (
-                      <FileText className="h-4 w-4 mr-2" />
-                    )}
-                    Gerar Relatório
-                  </Button>
-                )}
-              </div>
-            </div>
-          </ScrollArea>
-        )}
+      {/* COLUNA 1: Status da Coleta - 280px fixo */}
+      <div className="w-[280px] border-r border-border bg-card flex-shrink-0">
+        <CollectionStatus projectId={id!} onGenerateReport={handleGenerateReport} />
       </div>
 
-      {/* Main Area */}
-      <div className="flex-1 flex flex-col">
+      {/* COLUNA 2: Chat Principal - flex-1 */}
+      <div className="flex-1 flex flex-col min-w-0">
         {/* Header */}
-        <header className="border-b bg-card px-6 py-4">
-          <h1 className="text-xl font-bold">
-            {reportMode ? "Relatório de Cenário" : "Conversa com Agente Cenário"}
-          </h1>
-        </header>
-        
-        {/* Área dedicada de arquivos - FORA do header */}
-        {!reportMode && (
-          <div className="border-b bg-muted/30 px-6 py-3">
-            <AttachmentsList projectId={id!} />
+        <header className="border-b border-border bg-card px-6 py-4">
+          <div className="flex items-center justify-between">
+            <div>
+              <h1 className="text-xl font-bold text-foreground">
+                {reportMode ? "Relatório de Cenário" : "Agente de Cenário"}
+              </h1>
+              <p className="text-sm text-muted-foreground">{projectName}</p>
+            </div>
+            <Button variant="outline" size="sm" onClick={() => navigate("/dashboard")}>
+              <ArrowLeft className="h-4 w-4 mr-2" />
+              Voltar
+            </Button>
           </div>
-        )}
+        </header>
 
         {/* Content */}
         {reportMode && generatedReport ? (
@@ -429,7 +340,7 @@ _(Digite "buscar" se quiser que eu consulte os arquivos anexados)_`,
                 <ReactMarkdown>{generatedReport}</ReactMarkdown>
               </div>
             </ScrollArea>
-            <div className="border-t bg-card p-4 flex gap-2 justify-center">
+            <div className="border-t border-border bg-card p-4 flex gap-2 justify-center">
               <Button variant="outline" onClick={() => setReportMode(false)}>
                 ✏️ Solicitar Alterações
               </Button>
@@ -452,15 +363,15 @@ _(Digite "buscar" se quiser que eu consulte os arquivos anexados)_`,
                     }`}
                   >
                     {msg.role === "assistant" && (
-                      <div className="w-10 h-10 rounded-full bg-primary flex items-center justify-center flex-shrink-0">
-                        <Bot className="w-5 h-5 text-primary-foreground" />
+                      <div className="w-10 h-10 rounded-full bg-muted flex items-center justify-center flex-shrink-0">
+                        <Bot className="w-5 h-5 text-muted-foreground" />
                       </div>
                     )}
                     <Card
-                      className={`max-w-[80%] p-4 relative group ${
+                      className={`max-w-[75%] p-5 rounded-2xl shadow-none border-0 relative group ${
                         msg.role === "user"
-                          ? "bg-secondary text-secondary-foreground"
-                          : "bg-card"
+                          ? "bg-primary text-primary-foreground"
+                          : "bg-secondary text-secondary-foreground"
                       }`}
                     >
                       <Button
@@ -471,10 +382,10 @@ _(Digite "buscar" se quiser que eu consulte os arquivos anexados)_`,
                       >
                         <Copy className="h-3 w-3" />
                       </Button>
-                      <div className="prose prose-sm dark:prose-invert max-w-none">
+                      <div className="prose prose-sm prose-invert max-w-none">
                         <ReactMarkdown>{msg.content}</ReactMarkdown>
                       </div>
-                      <p className="text-xs text-muted-foreground mt-2">
+                      <p className="text-xs opacity-70 mt-2">
                         {new Date(msg.created_at).toLocaleTimeString("pt-BR", {
                           hour: "2-digit",
                           minute: "2-digit",
@@ -482,22 +393,19 @@ _(Digite "buscar" se quiser que eu consulte os arquivos anexados)_`,
                       </p>
                     </Card>
                     {msg.role === "user" && (
-                      <div className="w-10 h-10 rounded-full bg-secondary flex items-center justify-center flex-shrink-0">
-                        <User className="w-5 h-5 text-secondary-foreground" />
+                      <div className="w-10 h-10 rounded-full bg-primary/20 flex items-center justify-center flex-shrink-0">
+                        <User className="w-5 h-5 text-primary-foreground" />
                       </div>
                     )}
                   </div>
                 ))}
                 {sending && (
                   <div className="flex gap-3 justify-start">
-                    <div className="w-10 h-10 rounded-full bg-primary flex items-center justify-center flex-shrink-0">
-                      <Bot className="w-5 h-5 text-primary-foreground" />
+                    <div className="w-10 h-10 rounded-full bg-muted flex items-center justify-center flex-shrink-0">
+                      <Bot className="w-5 h-5 text-muted-foreground" />
                     </div>
-                    <Card className="p-4">
-                      <Loader2 className="h-5 w-5 animate-spin text-primary" />
-                      <p className="text-xs text-muted-foreground mt-2">
-                        Processando resposta...
-                      </p>
+                    <Card className="p-5 rounded-2xl shadow-none border-0 bg-secondary">
+                      <Loader2 className="h-5 w-5 animate-spin text-secondary-foreground" />
                     </Card>
                   </div>
                 )}
@@ -506,20 +414,14 @@ _(Digite "buscar" se quiser que eu consulte os arquivos anexados)_`,
             </ScrollArea>
 
             {/* Input Area */}
-            <div className="border-t bg-card p-4">
-              <div className="max-w-4xl mx-auto flex gap-2">
-                <FileUploadArea
-                  projectId={id!}
-                  onUploadComplete={(file) => {
-                    setAttachments((prev) => [...prev, file]);
-                  }}
-                />
+            <div className="border-t border-border bg-card p-4">
+              <div className="flex gap-3 items-end max-w-5xl mx-auto">
                 <div className="flex-1 relative">
                   <Textarea
                     value={input}
                     onChange={(e) => setInput(e.target.value)}
-                    placeholder="Digite sua resposta... (ou digite 'buscar' para consultar arquivos)"
-                    className="resize-none pr-16"
+                    placeholder="Digite sua resposta ou use 'buscar' para consultar arquivos..."
+                    className="resize-none bg-muted border-border text-foreground placeholder:text-muted-foreground rounded-lg pr-20 min-h-[56px]"
                     rows={2}
                     onKeyDown={(e) => {
                       if (e.key === "Enter" && e.ctrlKey) {
@@ -529,13 +431,15 @@ _(Digite "buscar" se quiser que eu consulte os arquivos anexados)_`,
                     }}
                     disabled={sending}
                   />
-                  <div className="absolute bottom-2 right-2 text-xs text-muted-foreground">
-                    {input.length > 0 && `${input.length} | `}
-                    {input.trim().toLowerCase() === "buscar" ? "🔍 " : ""}
+                  <div className="absolute bottom-3 right-3 text-xs text-muted-foreground">
                     Ctrl+Enter
                   </div>
                 </div>
-                <Button onClick={handleSend} disabled={sending || !input.trim()} size="lg">
+                <Button 
+                  onClick={handleSend} 
+                  disabled={sending || !input.trim()}
+                  className="h-14 px-6 bg-primary hover:bg-primary/90"
+                >
                   {sending ? (
                     <Loader2 className="h-5 w-5 animate-spin" />
                   ) : (
@@ -546,6 +450,19 @@ _(Digite "buscar" se quiser que eu consulte os arquivos anexados)_`,
             </div>
           </>
         )}
+      </div>
+
+      {/* COLUNA 3: Documentos Anexados - 320px fixo */}
+      <div className="w-[320px] border-l border-border bg-card flex-shrink-0 flex flex-col">
+        <div className="p-4 border-b border-border">
+          <h3 className="font-bold text-foreground">Documentos Anexados</h3>
+        </div>
+        <ScrollArea className="flex-1 p-4">
+          <div className="space-y-4">
+            <FileUploadArea projectId={id!} onUploadComplete={() => {}} />
+            <AttachmentsList projectId={id!} />
+          </div>
+        </ScrollArea>
       </div>
     </div>
   );
