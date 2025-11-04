@@ -16,7 +16,18 @@ export function CollectionStatus({ projectId, onGenerateReport }: Props) {
     answered: 0,
     total: 20,
     phase: 'universal',
-    filesAnalyzed: 0
+    filesAnalyzed: 0,
+    essentialInfo: {
+      identificacao: false,
+      problema: false,
+      impacto: false,
+      beneficiarios: false,
+      situacao_atual: false,
+      resultado: false,
+      solucao_candidata: false,
+      quantitativos: false,
+      planejamento: false
+    }
   });
 
   useEffect(() => {
@@ -59,22 +70,35 @@ export function CollectionStatus({ projectId, onGenerateReport }: Props) {
       answered: collectionStatus.answered?.length || 0,
       total: collectionStatus.total_questions || 20,
       phase: collectionStatus.phase || 'universal',
-      filesAnalyzed: collectionStatus.files_analyzed || 0
+      filesAnalyzed: collectionStatus.files_analyzed || 0,
+      essentialInfo: collectionStatus.essentialInfo || {
+        identificacao: false,
+        problema: false,
+        impacto: false,
+        beneficiarios: false,
+        situacao_atual: false,
+        resultado: false,
+        solucao_candidata: false,
+        quantitativos: false,
+        planejamento: false
+      }
     });
   };
 
-  const progress = (status.answered / status.total) * 100;
-
-  const essentialInfo = [
-    'Identificação',
-    'Problema / Necessidade',
-    'Impacto',
-    'Beneficiários',
-    'Solução Candidata',
-    'Quantitativos',
-    'Prazos',
-    'Orçamento'
+  const essentialItems = [
+    { key: 'identificacao', label: 'Identificação' },
+    { key: 'problema', label: 'Problema / Necessidade' },
+    { key: 'impacto', label: 'Impacto' },
+    { key: 'beneficiarios', label: 'Beneficiários' },
+    { key: 'situacao_atual', label: 'Situação Atual' },
+    { key: 'resultado', label: 'Resultado Esperado' },
+    { key: 'solucao_candidata', label: 'Solução Candidata' },
+    { key: 'quantitativos', label: 'Quantitativos' },
+    { key: 'planejamento', label: 'Prazos e Orçamento' }
   ];
+
+  const completedCount = Object.values(status.essentialInfo).filter(Boolean).length;
+  const progress = (completedCount / 9) * 100;
 
   return (
     <div className="h-full flex flex-col p-6 space-y-6">
@@ -101,10 +125,14 @@ export function CollectionStatus({ projectId, onGenerateReport }: Props) {
       <div className="space-y-3 flex-1">
         <h3 className="text-sm font-semibold text-foreground">Informações Essenciais</h3>
         <div className="space-y-2">
-          {essentialInfo.map((item, index) => (
-            <div key={item} className="flex items-center gap-2">
-              <Circle className={`w-4 h-4 ${index < status.answered ? 'text-success fill-success' : 'text-muted-foreground'}`} />
-              <span className="text-sm text-muted-foreground">{item}</span>
+          {essentialItems.map((item) => (
+            <div key={item.key} className="flex items-center gap-2">
+              <Circle className={`w-4 h-4 transition-colors ${
+                status.essentialInfo[item.key as keyof typeof status.essentialInfo]
+                  ? 'text-success fill-success' 
+                  : 'text-muted-foreground'
+              }`} />
+              <span className="text-sm text-muted-foreground">{item.label}</span>
             </div>
           ))}
         </div>

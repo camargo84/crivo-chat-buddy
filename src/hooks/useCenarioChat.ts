@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 import { callAI, isResponseTooShort, isResponseVague, type Message } from '@/lib/ai-service';
-import { getStandardQuestion } from '@/lib/prompts/standard-questions';
+import { getStandardQuestion, STANDARD_QUESTIONS } from '@/lib/prompts/standard-questions';
 import { generateAdaptiveQuestions } from '@/lib/prompts/adaptive-questions';
 import { monitorCompleteness, type CompletenessStatus } from '@/lib/completeness-monitor';
 import { generateSynthesis, type SynthesisData } from '@/lib/synthesis-service';
@@ -52,18 +52,63 @@ export function useCenarioChat({ projectId, userProfile, demandaTitle }: Props) 
     try {
       const status = await monitorCompleteness(messages);
       setCompletenessStatus(status);
-      
-      await supabase
-        .from('projects')
-        .update({
-          coleta_completa: status.isComplete,
-          completude_score: status.score,
-          informacoes_essenciais: status.essentialInfo
-        })
-        .eq('id', projectId);
-      
     } catch (error) {
       console.error('[Check] Erro:', error);
+    }
+  }
+
+  async function updateCollectionStatus(questionNumber: number, essentialKey?: string) {
+    try {
+      const { data: currentData } = await supabase
+        .from('projects')
+        .select('collection_status')
+        .eq('id', projectId)
+        .single();
+
+      const defaultStatus = {
+        phase: 'standard_questions',
+        answered: [],
+        total_questions: 20,
+        complete: false,
+        files_analyzed: 0,
+        essentialInfo: {
+          identificacao: false,
+          problema: false,
+          impacto: false,
+          beneficiarios: false,
+          situacao_atual: false,
+          resultado: false,
+          solucao_candidata: false,
+          quantitativos: false,
+          planejamento: false
+        }
+      };
+
+      const status = (currentData?.collection_status as any) || defaultStatus;
+
+      if (!status.answered.includes(questionNumber)) {
+        status.answered.push(questionNumber);
+      }
+
+      if (essentialKey && status.essentialInfo) {
+        status.essentialInfo[essentialKey] = true;
+      }
+
+      if (questionNumber <= 10) {
+        status.phase = 'standard_questions';
+      } else if (questionNumber <= 20) {
+        status.phase = 'adaptive_questions';
+      }
+
+      status.complete = status.answered.length >= 20;
+
+      await supabase
+        .from('projects')
+        .update({ collection_status: status as any })
+        .eq('id', projectId);
+
+    } catch (error) {
+      console.error('[UpdateStatus] Erro:', error);
     }
   }
   
@@ -97,6 +142,11 @@ export function useCenarioChat({ projectId, userProfile, demandaTitle }: Props) 
       
       // FASE 1: Perguntas padrão (1-10)
       if (currentQuestion < 10) {
+        const questionObj = STANDARD_QUESTIONS.find(q => q.id === currentQuestion + 1);
+        if (questionObj?.essentialKey) {
+          await updateCollectionStatus(currentQuestion + 1, questionObj.essentialKey);
+        }
+
         const next = getStandardQuestion(currentQuestion + 1, userProfile, demandaTitle, userMessage);
         const assistantMsg: Message = { role: 'assistant', content: next };
         
@@ -140,6 +190,8 @@ export function useCenarioChat({ projectId, userProfile, demandaTitle }: Props) 
       
       // FASE 3: Adaptativas (11-20)
       if (currentQuestion >= 11 && currentQuestion <= 20) {
+        await updateCollectionStatus(currentQuestion);
+        
         const idx = currentQuestion - 11;
         
         if (idx < adaptiveQuestions.length - 1) {
@@ -199,14 +251,23 @@ export function useCenarioChat({ projectId, userProfile, demandaTitle }: Props) 
       
       const synthesis = await generateSynthesis(history, userProfile);
       setSynthesisData(synthesis);
+
+      const { data: currentData } = await supabase
+        .from('projects')
+        .select('collection_status')
+        .eq('id', projectId)
+        .single();
+
+      const status = (currentData?.collection_status as any) || {};
+      status.phase = 'complete';
+      status.complete = true;
       
       await supabase
         .from('projects')
         .update({
           synthesis_data: synthesis as any,
           current_enfoque: 'requisitos',
-          coleta_completa: true,
-          completude_score: 100
+          collection_status: status as any
         })
         .eq('id', projectId);
       
